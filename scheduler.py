@@ -19,13 +19,6 @@ import time
 import threading
 from datetime import datetime
 
-from src.scraper import fetch_leads, save_to_csv
-from src.email_finder import enrich_leads, save_enriched_csv
-from src.sheets_manager import SheetsManager
-from src.lead_scoring import update_sheet_scores
-from src.email_sender import run_outreach
-import config
-
 SCHEDULE_HOURS = int(os.getenv("SCHEDULE_HOURS", "6"))
 SCHEDULE_SEND_EMAILS = os.getenv("SCHEDULE_SEND_EMAILS", "false").lower() == "true"
 TARGETS_TAB_NAME = "Targets"
@@ -78,6 +71,13 @@ def _read_targets(sheets_mgr) -> list[dict]:
 
 def run_scheduled_pipeline():
     """Read targets from Google Sheet and run pipeline for each."""
+    # Lazy imports to keep startup fast
+    from src.scraper import fetch_leads, save_to_csv
+    from src.email_finder import enrich_leads, save_enriched_csv
+    from src.sheets_manager import SheetsManager
+    from src.lead_scoring import update_sheet_scores
+    from src.email_sender import run_outreach
+    import config
     print(f"\n{'='*60}")
     print(f"  SCHEDULED RUN — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}\n")
