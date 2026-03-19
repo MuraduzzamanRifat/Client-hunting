@@ -13,6 +13,37 @@ from flask import Flask, jsonify, request, render_template_string, render_templa
 
 app = Flask(__name__)
 
+# ── Start background services (works with both gunicorn and python app.py) ──
+_bg_started = False
+
+def _start_background_services():
+    global _bg_started
+    if _bg_started:
+        return
+    _bg_started = True
+
+    try:
+        from src.telegram_bot import start_bot_thread
+        start_bot_thread()
+    except Exception as e:
+        print(f"[WARNING] Telegram bot failed: {e}")
+
+    try:
+        from src.followup import start_followup_thread
+        start_followup_thread()
+    except Exception as e:
+        print(f"[WARNING] Follow-up thread failed: {e}")
+
+    try:
+        from src.watchdog import start_watchdog
+        start_watchdog()
+    except Exception as e:
+        print(f"[WARNING] Watchdog failed: {e}")
+
+
+# Start background services on import (for gunicorn)
+_start_background_services()
+
 # ── Pipeline state ───────────────────────────────────────────────────
 pipeline_status = {
     "running": False,
