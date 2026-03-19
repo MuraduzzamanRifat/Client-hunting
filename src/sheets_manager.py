@@ -7,6 +7,7 @@ read/update helpers for other modules.
 """
 
 import csv
+import json
 import os
 import sys
 from datetime import date
@@ -40,19 +41,38 @@ class SheetsManager:
         self.worksheet = None
 
     def authenticate(self):
-        """Authenticate with Google Sheets API using a service account."""
+        """
+        Authenticate with Google Sheets API.
+        Supports two modes:
+          1. GOOGLE_CREDS_JSON env var (for cloud deployment like Koyeb)
+          2. Local credentials.json file (for local development)
+        """
+        # Mode 1: Credentials from environment variable (Koyeb/cloud)
+        creds_json = os.getenv("GOOGLE_CREDS_JSON", "")
+        if creds_json:
+            try:
+                info = json.loads(creds_json)
+                creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+                self.client = gspread.authorize(creds)
+                print("  Google Sheets authenticated (from env).")
+                return True
+            except Exception as e:
+                print(f"[ERROR] Failed to parse GOOGLE_CREDS_JSON: {e}")
+                return False
+
+        # Mode 2: Local credentials file
         creds_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             self.creds_file,
         )
         if not os.path.exists(creds_path):
             print(f"[ERROR] Credentials file not found: {creds_path}")
-            print("        Download it from Google Cloud Console → Service Accounts.")
+            print("        Set GOOGLE_CREDS_JSON env var or place credentials.json in project root.")
             return False
 
         creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
         self.client = gspread.authorize(creds)
-        print("  Google Sheets authenticated.")
+        print("  Google Sheets authenticated (from file).")
         return True
 
     def open_or_create_sheet(self, sheet_name: str = ""):
