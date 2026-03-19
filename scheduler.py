@@ -1,8 +1,16 @@
 """
 Background Scheduler — Runs the pipeline automatically on a schedule.
 
-Can run standalone or alongside the Flask web dashboard.
-Default: every 6 hours.
+Reads target niches and locations from a "Targets" Google Sheet tab,
+so you can add/remove/edit targets from anywhere without touching code.
+
+Targets sheet format:
+  | Keyword      | Location              | Count | Active |
+  | cafes        | Key West, Florida     | 20    | Yes    |
+  | restaurants  | Miami, Florida        | 30    | Yes    |
+  | barbershops  | Orlando, Florida      | 20    | No     |  ← skipped
+
+Runs every SCHEDULE_HOURS (default 6).
 """
 
 import os
@@ -18,84 +26,144 @@ from src.lead_scoring import update_sheet_scores
 from src.email_sender import run_outreach
 import config
 
-# ── Schedule config (from env or defaults) ───────────────────────────
 SCHEDULE_HOURS = int(os.getenv("SCHEDULE_HOURS", "6"))
-SCHEDULE_KEYWORD = os.getenv("SCHEDULE_KEYWORD", "")
-SCHEDULE_LOCATION = os.getenv("SCHEDULE_LOCATION", "")
-SCHEDULE_COUNT = int(os.getenv("SCHEDULE_COUNT", "20"))
 SCHEDULE_SEND_EMAILS = os.getenv("SCHEDULE_SEND_EMAILS", "false").lower() == "true"
+TARGETS_TAB_NAME = "Targets"
 
-# Support multiple keyword/location pairs via comma-separated values
-# e.g., SCHEDULE_KEYWORD="cafes,restaurants,barbershops"
-#        SCHEDULE_LOCATION="Key West,Miami,Orlando"
-KEYWORDS = [k.strip() for k in SCHEDULE_KEYWORD.split(",") if k.strip()]
-LOCATIONS = [l.strip() for l in SCHEDULE_LOCATION.split(",") if l.strip()]
+# Column headers expected in the Targets tab
+COL_KEYWORD = "Keyword"
+COL_LOCATION = "Location"
+COL_COUNT = "Count"
+COL_ACTIVE = "Active"
+
+
+def _setup_targets_tab(sheets_mgr) -> None:
+    """Create the Targets tab if it doesn't exist, with example rows."""
+    try:
+        ws = sheets_mgr.sheet.worksheet(TARGETS_TAB_NAME)
+        # Tab exists — check if it has headers
+        if not ws.row_values(1):
+            ws.update("A1", [[COL_KEYWORD, COL_LOCATION, COL_COUNT, COL_ACTIVE]])
+            ws.update("A2", [["cafes", "Key West, Florida", "20", "Yes"]])
+            ws.format("A1:D1", {"textFormat": {"bold": True}})
+    except Exception:
+        # Tab doesn't exist — create it
+        ws = sheets_mgr.sheet.add_worksheet(title=TARGETS_TAB_NAME, rows=50, cols=4)
+        ws.update("A1", [[COL_KEYWORD, COL_LOCATION, COL_COUNT, COL_ACTIVE]])
+        ws.update("A2", [["cafes", "Key West, Florida", "20", "Yes"]])
+        ws.format("A1:D1", {"textFormat": {"bold": True}})
+        print(f"  [SCHEDULER] Created '{TARGETS_TAB_NAME}' tab with example row.")
+
+
+def _read_targets(sheets_mgr) -> list[dict]:
+    """Read active targets from the Targets tab."""
+    try:
+        ws = sheets_mgr.sheet.worksheet(TARGETS_TAB_NAME)
+        records = ws.get_all_records()
+        targets = []
+        for row in records:
+            active = str(row.get(COL_ACTIVE, "")).strip().lower()
+            keyword = str(row.get(COL_KEYWORD, "")).strip()
+            location = str(row.get(COL_LOCATION, "")).strip()
+            count = int(row.get(COL_COUNT, 20) or 20)
+
+            if active == "yes" and keyword and location:
+                targets.append({"keyword": keyword, "location": location, "count": count})
+
+        return targets
+    except Exception as e:
+        print(f"  [SCHEDULER] Failed to read targets: {e}")
+        return []
 
 
 def run_scheduled_pipeline():
-    """Run the pipeline for all keyword/location combinations."""
-    if not KEYWORDS or not LOCATIONS:
-        print("[SCHEDULER] No SCHEDULE_KEYWORD or SCHEDULE_LOCATION set in .env. Skipping.")
-        return
-
+    """Read targets from Google Sheet and run pipeline for each."""
     print(f"\n{'='*60}")
     print(f"  SCHEDULED RUN — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Keywords : {KEYWORDS}")
-    print(f"  Locations: {LOCATIONS}")
     print(f"{'='*60}\n")
 
-    for keyword in KEYWORDS:
-        for location in LOCATIONS:
-            try:
-                print(f"\n--- Running: '{keyword}' in '{location}' ---")
+    # Connect to Sheets
+    sheets = SheetsManager()
+    if not sheets.authenticate():
+        print("  [SCHEDULER] Google Sheets auth failed!")
+        return
+    sheets.open_or_create_sheet()
 
-                # Step 1: Scrape
-                leads = fetch_leads(keyword, location, SCHEDULE_COUNT)
-                if not leads:
-                    print(f"  No leads for '{keyword}' in '{location}'. Skipping.")
-                    continue
-                csv_path = save_to_csv(leads, keyword, location)
+    # Ensure Targets tab exists
+    _setup_targets_tab(sheets)
 
-                # Step 2: Enrich
-                enriched = enrich_leads(csv_path)
-                enriched_path = save_enriched_csv(enriched)
+    # Read targets
+    targets = _read_targets(sheets)
+    if not targets:
+        print("  [SCHEDULER] No active targets found in Targets tab. Add rows and set Active=Yes.")
+        return
 
-                # Step 3: Upload
-                sheets = SheetsManager()
-                if not sheets.authenticate():
-                    print("  Sheets auth failed. Skipping.")
-                    continue
-                sheets.open_or_create_sheet()
-                raw = sheets.load_csv(enriched_path)
-                clean = sheets.clean_data(raw)
-                sheets.upload_to_sheets(clean)
+    print(f"  Active targets: {len(targets)}")
+    for t in targets:
+        print(f"    - '{t['keyword']}' in '{t['location']}' ({t['count']} leads)")
 
-                # Step 4: Score
-                update_sheet_scores(sheets)
+    # Run pipeline for each target
+    total_scraped = 0
+    total_emails = 0
 
-                # Step 5: Send emails
-                if SCHEDULE_SEND_EMAILS:
-                    run_outreach(sheets)
+    for i, target in enumerate(targets, 1):
+        keyword = target["keyword"]
+        location = target["location"]
+        count = target["count"]
 
-                emails_found = sum(1 for l in enriched if l.get("Email"))
-                print(f"  Done: {len(leads)} scraped, {emails_found} emails found")
+        try:
+            print(f"\n--- [{i}/{len(targets)}] '{keyword}' in '{location}' ---")
 
-            except Exception as e:
-                print(f"  [ERROR] Pipeline failed for '{keyword}' in '{location}': {e}")
+            # Step 1: Scrape
+            leads = fetch_leads(keyword, location, count)
+            if not leads:
+                print(f"  No leads found. Skipping.")
                 continue
+            csv_path = save_to_csv(leads, keyword, location)
+            total_scraped += len(leads)
 
-    print(f"\n  Scheduled run complete. Next run in {SCHEDULE_HOURS} hours.")
+            # Step 2: Enrich
+            enriched = enrich_leads(csv_path)
+            enriched_path = save_enriched_csv(enriched)
+            emails_found = sum(1 for l in enriched if l.get("Email"))
+            total_emails += emails_found
+
+            # Step 3: Upload (reuse same sheets connection)
+            raw = sheets.load_csv(enriched_path)
+            clean = sheets.clean_data(raw)
+            sheets.upload_to_sheets(clean)
+
+            # Step 4: Score
+            update_sheet_scores(sheets)
+
+            # Step 5: Send emails
+            if SCHEDULE_SEND_EMAILS:
+                run_outreach(sheets)
+
+            print(f"  Done: {len(leads)} scraped, {emails_found} emails found")
+
+        except Exception as e:
+            print(f"  [ERROR] Failed for '{keyword}' in '{location}': {e}")
+            continue
+
+    print(f"\n{'='*60}")
+    print(f"  SCHEDULED RUN COMPLETE")
+    print(f"  Total scraped: {total_scraped} | Total emails: {total_emails}")
+    print(f"  Next run in {SCHEDULE_HOURS} hours")
+    print(f"{'='*60}")
 
 
 def start_scheduler_loop():
     """Run the scheduler in an infinite loop."""
     print(f"[SCHEDULER] Starting — runs every {SCHEDULE_HOURS} hours")
-    print(f"[SCHEDULER] Keywords: {KEYWORDS}")
-    print(f"[SCHEDULER] Locations: {LOCATIONS}")
     print(f"[SCHEDULER] Send emails: {SCHEDULE_SEND_EMAILS}")
+    print(f"[SCHEDULER] Targets are read from the '{TARGETS_TAB_NAME}' tab in Google Sheets")
 
     while True:
-        run_scheduled_pipeline()
+        try:
+            run_scheduled_pipeline()
+        except Exception as e:
+            print(f"[SCHEDULER] Unexpected error: {e}")
         sleep_seconds = SCHEDULE_HOURS * 3600
         print(f"\n[SCHEDULER] Sleeping {SCHEDULE_HOURS} hours until next run...")
         time.sleep(sleep_seconds)
@@ -103,9 +171,6 @@ def start_scheduler_loop():
 
 def start_scheduler_thread():
     """Start the scheduler as a background thread (used by app.py)."""
-    if not KEYWORDS or not LOCATIONS:
-        print("[SCHEDULER] No keywords/locations configured. Scheduler not started.")
-        return
     thread = threading.Thread(target=start_scheduler_loop, daemon=True)
     thread.start()
     print("[SCHEDULER] Background thread started.")
