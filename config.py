@@ -44,23 +44,25 @@ USER_AGENT = (
 SHEET_NAME = "Lead CRM"
 
 # ── Lead Scoring Weights ────────────────────────────────────────────
-# Primary target: businesses WITHOUT a website (WordPress creation)
-# Secondary target: businesses WITH a website (SEO + content automation)
-SCORE_EMAIL = 30               # has email (reachable)
-SCORE_NO_WEBSITE = 25          # NO website = hot lead for website service
-SCORE_HAS_WEBSITE = 10         # has website = secondary target (SEO)
-SCORE_HIGH_RATING = 15         # rating >= 4.0 (established business)
+# Has email       → High priority (send email)
+# No email + phone → Medium priority (call queue)
+# No email + no phone → Skip (not reachable, avoid wasting resources)
+SCORE_EMAIL = 40               # has email = top priority
+SCORE_PHONE = 20               # has phone = reachable by call
+SCORE_NO_WEBSITE = 25          # NO website = hot lead for WordPress
+SCORE_HAS_WEBSITE = 10         # has website = SEO target
+SCORE_HIGH_RATING = 15         # rating >= 4.0
 SCORE_REVIEWS_LOW = 5          # 0-10 reviews
 SCORE_REVIEWS_MED = 10         # 11-50 reviews
 SCORE_REVIEWS_HIGH = 15        # 50+ reviews
 
 # ── Priority Thresholds ─────────────────────────────────────────────
-HIGH_THRESHOLD = 80
-MEDIUM_THRESHOLD = 50
+HIGH_THRESHOLD = 65
+MEDIUM_THRESHOLD = 40
 
 # ── Outreach Thresholds ─────────────────────────────────────────────
-MIN_OUTREACH_SCORE = 60        # minimum score to send email
-MIN_CALL_SCORE = 70            # minimum score for phone fallback
+MIN_OUTREACH_SCORE = 50        # minimum score to send email
+MIN_CALL_SCORE = 40            # minimum score for call queue
 
 # ── Email Sending Settings ──────────────────────────────────────────
 MAX_EMAILS_PER_DAY = 50

@@ -16,23 +16,29 @@ def calculate_score(lead: dict) -> int:
     """
     Calculate a lead quality score (0-100).
 
-    Primary target: businesses WITHOUT a website (WordPress creation).
-    Secondary target: businesses WITH a website (SEO + content automation).
-
-    Scoring breakdown:
-      - Has email           → +30  (reachable)
-      - NO website          → +25  (hot lead — needs a website)
-      - Has website         → +10  (secondary — SEO target)
-      - Rating >= 4.0       → +15  (established business)
-      - Reviews 0-10        → +5
-      - Reviews 11-50       → +10
-      - Reviews 50+         → +15
+    Rules:
+      - Has email           → +40  (High — send email)
+      - Has phone           → +20  (Medium — call queue if no email)
+      - No email + no phone → 0    (Skip — not reachable)
+      - NO website          → +25  (hot lead for WordPress)
+      - Has website         → +10  (SEO target)
+      - Rating >= 4.0       → +15
+      - Reviews tiered      → +5/+10/+15
     """
+    has_email = bool(lead.get("Email"))
+    has_phone = bool(lead.get("Phone"))
+
+    # No email AND no phone = not reachable, skip entirely
+    if not has_email and not has_phone:
+        return 0
+
     score = 0
 
-    # Email presence (+30) — can we reach them?
-    if lead.get("Email"):
+    # Reachability
+    if has_email:
         score += config.SCORE_EMAIL
+    if has_phone:
+        score += config.SCORE_PHONE
 
     # Website: no website = primary target, has website = secondary
     if not lead.get("Website"):
@@ -40,7 +46,7 @@ def calculate_score(lead: dict) -> int:
     else:
         score += config.SCORE_HAS_WEBSITE
 
-    # Rating quality (+15)
+    # Rating quality
     try:
         rating = float(lead.get("Rating", 0) or 0)
         if rating >= 4.0:
