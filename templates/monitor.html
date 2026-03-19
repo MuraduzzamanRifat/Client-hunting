@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Monitor — LeadGen AI{% endblock %}
+{% block head_extra %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
+
+{% block extra_css %}
+.time-filter { display:flex;gap:2px;background:var(--bg-card);border-radius:var(--radius-sm);padding:3px;border:1px solid var(--border); }
+.time-filter button { padding:6px 12px;background:none;border:none;color:var(--text-muted);font-size:12px;font-weight:500;cursor:pointer;border-radius:4px;transition:all 0.15s; }
+.time-filter button.active { background:var(--accent);color:#fff; }
+.time-filter button:hover:not(.active) { color:var(--text-primary); }
+.refresh-btn { padding:6px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s; }
+.refresh-btn:hover { border-color:var(--accent);color:var(--accent); }
+.last-update { font-size:11px;color:var(--text-muted); }
+.kpi-trend { display:flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;font-weight:500;color:var(--text-muted); }
+.chart-container { position:relative;height:200px; }
+.funnel { display:flex;align-items:stretch;gap:0;margin:8px 0; }
+.funnel-step { flex:1;text-align:center;padding:16px 8px;border-radius:var(--radius-sm); }
+.funnel-step .num { font-size:24px;font-weight:700;line-height:1;margin-bottom:4px; }
+.funnel-step .label { font-size:11px;color:var(--text-muted);font-weight:500; }
+.funnel-step .pct { font-size:11px;font-weight:600;margin-top:4px; }
+.funnel-arrow { display:flex;align-items:center;color:var(--border);font-size:16px;padding:0 2px; }
+.heatmap-grid { display:grid;grid-template-columns:36px repeat(24,1fr);gap:2px;font-size:9px; }
+.hm-cell { aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;cursor:default;transition:transform 0.1s;position:relative; }
+.hm-cell:hover { transform:scale(1.3);z-index:2; }
+.hm-label { display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:var(--text-muted);font-weight:500; }
+.hm-hour { display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-weight:500; }
+.alert-item { display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px;font-size:13px;line-height:1.4; }
+.alert-item.critical { background:var(--red-bg);border:1px solid rgba(239,68,68,0.2); }
+.alert-item.warning { background:var(--yellow-bg);border:1px solid rgba(234,179,8,0.2); }
+.alert-dot { width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0; }
+.alert-item.critical .alert-dot { background:var(--red); }
+.alert-item.warning .alert-dot { background:var(--yellow); }
+.alert-text { flex:1;color:var(--text-secondary); }
+.alert-time { font-size:11px;color:var(--text-muted);white-space:nowrap; }
+.insight-item { display:flex;gap:10px;padding:12px;border-radius:var(--radius-sm);background:var(--purple-bg);border:1px solid rgba(167,139,250,0.15);margin-bottom:8px;font-size:13px; }
+.insight-icon { font-size:18px;flex-shrink:0; }
+.insight-text { flex:1;color:var(--text-secondary);line-height:1.4; }
+.insight-text strong { color:var(--text-primary); }
+.domain-item { display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px; }
+.domain-item:last-child { border-bottom:none; }
+.domain-name { min-width:120px;font-weight:600;color:var(--text-primary);font-size:12px; }
+.domain-bar-track { flex:1;height:6px;background:var(--bg-primary);border-radius:3px;overflow:hidden; }
+.domain-bar-fill { height:100%;border-radius:3px;transition:width 0.5s ease; }
+.domain-meta { min-width:100px;text-align:right;font-size:11px;color:var(--text-muted); }
+.log-tabs { display:flex;gap:4px;margin-bottom:12px; }
+.log-tab { padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer;background:var(--bg-primary);color:var(--text-muted);border:1px solid var(--border);font-weight:500;transition:all 0.15s; }
+.log-tab.active { background:var(--accent);color:#fff;border-color:var(--accent); }
+.log-tab:hover:not(.active) { border-color:var(--border-hover);color:var(--text-secondary); }
+.log-scroll { max-height:280px;overflow-y:auto; }
+.log-scroll::-webkit-scrollbar { width:4px; }
+.log-scroll::-webkit-scrollbar-thumb { background:var(--border);border-radius:2px; }
+.log-table { width:100%;border-collapse:collapse; }
+.log-table th { text-align:left;padding:8px 10px;color:var(--text-muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-card); }
+.log-table td { padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5);color:var(--text-secondary);font-size:12px; }
+.log-table tr:hover td { background:var(--bg-card-hover); }
+.badge.sent { background:var(--green-bg);color:var(--green); }
+.badge.bounced,.badge.failed { background:var(--red-bg);color:var(--red); }
+.badge.collected { background:rgba(59,130,246,0.1);color:var(--accent); }
+.card-action { font-size:12px;color:var(--accent);cursor:pointer;text-decoration:none;font-weight:500; }
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>System Monitor</h1>
+    <div class="page-header-right">
+        <div class="time-filter">
+            <button class="active" onclick="setTimeRange(this,'today')">Today</button>
+            <button onclick="setTimeRange(this,'7d')">7 Days</button>
+            <button onclick="setTimeRange(this,'30d')">30 Days</button>
+        </div>
+        <button class="refresh-btn" onclick="fetchAll()">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh
+        </button>
+        <span class="last-update" id="lastUpdate"></span>
+    </div>
+</div>
+
+<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Emails Sent</div><div class="kpi-value blue" id="kSent">0</div><div class="kpi-trend" id="kSentTrend">--</div></div>
+    <div class="kpi-card"><div class="kpi-label">Delivery Rate</div><div class="kpi-value green" id="kDelivery">0%</div><div class="kpi-trend" id="kDeliveryTrend">--</div></div>
+    <div class="kpi-card"><div class="kpi-label">Bounce Rate</div><div class="kpi-value" id="kBounce">0%</div><div class="kpi-trend" id="kBounceTrend">--</div></div>
+    <div class="kpi-card"><div class="kpi-label">Emails Collected</div><div class="kpi-value purple" id="kCollected">0</div><div class="kpi-trend" id="kCollectedTrend">--</div></div>
+</div>
+
+<div class="grid-2">
+    <div class="card"><div class="card-header"><div class="card-title">Email Funnel</div></div><div class="funnel" id="funnel"></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">Rate Breakdown</div></div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:0;">
+            <div class="kpi-card" style="padding:14px;border:none;background:var(--bg-primary);"><div class="kpi-label" style="font-size:11px">Delivered</div><div class="kpi-value green" style="font-size:22px" id="rDelivery">0%</div></div>
+            <div class="kpi-card" style="padding:14px;border:none;background:var(--bg-primary);"><div class="kpi-label" style="font-size:11px">Bounced</div><div class="kpi-value red" style="font-size:22px" id="rBounce">0%</div></div>
+            <div class="kpi-card" style="padding:14px;border:none;background:var(--bg-primary);"><div class="kpi-label" style="font-size:11px">Replied</div><div class="kpi-value" style="font-size:22px;color:var(--yellow)" id="rReply">0%</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-3-1">
+    <div class="card"><div class="card-header"><div class="card-title">Activity (Last 24 Hours)</div></div><div class="chart-container"><canvas id="hourlyChart"></canvas></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">AI Insights</div></div><div id="insights"></div></div>
+</div>
+
+<div class="grid-2">
+    <div class="card"><div class="card-header"><div class="card-title">Sending Heatmap</div></div><div class="heatmap-grid" id="heatmap"></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">Domain Breakdown</div></div><div id="domainList"></div></div>
+</div>
+
+<div class="card" style="margin-bottom:24px;">
+    <div class="card-header"><div class="card-title">Alerts</div><span class="card-action" id="alertCount">0 active</span></div>
+    <div id="alertList"></div>
+</div>
+
+<div class="card">
+    <div class="card-header"><div class="card-title">Event Log</div></div>
+    <div class="log-tabs">
+        <div class="log-tab active" onclick="setLogFilter(this,'')">All</div>
+        <div class="log-tab" onclick="setLogFilter(this,'sent')">Sent</div>
+        <div class="log-tab" onclick="setLogFilter(this,'bounced')">Bounced</div>
+        <div class="log-tab" onclick="setLogFilter(this,'collected')">Collected</div>
+        <div class="log-tab" onclick="setLogFilter(this,'failed')">Failed</div>
+    </div>
+    <div class="log-scroll">
+        <table class="log-table"><thead><tr><th>Time</th><th>Event</th><th>Recipient</th><th>Subject</th><th>Status</th></tr></thead><tbody id="logBody"></tbody></table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let hourlyChart=null,logFilter='';
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function setTimeRange(el,r){document.querySelectorAll('.time-filter button').forEach(b=>b.classList.remove('active'));el.classList.add('active');fetchAll();}
+function setLogFilter(el,type){logFilter=type;document.querySelectorAll('.log-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');fetchLog();}
+
+function renderFunnel(f){
+    const steps=[{label:'Collected',num:f.collected,color:'var(--accent)',pct:''},{label:'Sent',num:f.sent,color:'var(--purple)',pct:f.collected?Math.round(f.sent/f.collected*100)+'%':''},{label:'Delivered',num:f.delivered,color:'var(--green)',pct:f.sent?Math.round(f.delivered/f.sent*100)+'%':''},{label:'Replied',num:f.replied,color:'var(--yellow)',pct:f.sent?Math.round(f.replied/f.sent*100)+'%':''}];
+    document.getElementById('funnel').innerHTML=steps.map((s,i)=>(i>0?'<div class="funnel-arrow">&#8250;</div>':'')+`<div class="funnel-step" style="background:${s.color}11"><div class="num" style="color:${s.color}">${s.num}</div><div class="label">${s.label}</div>${s.pct?`<div class="pct" style="color:${s.color}">${s.pct}</div>`:''}</div>`).join('');
+}
+
+function generateInsights(summary){
+    const el=document.getElementById('insights'),insights=[],sent=summary.total_sent||0,bounce=summary.rates?.bounce||0,delivery=summary.rates?.delivery||0;
+    if(sent===0){insights.push({icon:'&#128640;',text:'<strong>No emails sent yet.</strong> Run your first pipeline to start collecting data.'});}
+    else{if(bounce>5)insights.push({icon:'&#9888;&#65039;',text:`<strong>High bounce rate (${bounce}%).</strong> Pause and clean your email list.`});else if(bounce>2)insights.push({icon:'&#128161;',text:`<strong>Bounce rate at ${bounce}%.</strong> Monitor closely.`});else if(sent>=5)insights.push({icon:'&#9989;',text:`<strong>Excellent delivery (${delivery}%).</strong> Safe to increase volume.`});if(sent<10)insights.push({icon:'&#128293;',text:'<strong>Domain warming phase.</strong> Keep under 15/day this week.'});}
+    if(!insights.length)insights.push({icon:'&#129302;',text:'<strong>All systems nominal.</strong> No issues detected.'});
+    el.innerHTML=insights.map(i=>`<div class="insight-item"><div class="insight-icon">${i.icon}</div><div class="insight-text">${i.text}</div></div>`).join('');
+}
+
+function renderHeatmap(data){
+    const grid=document.getElementById('heatmap'),maxCount=Math.max(1,...data.map(d=>d.count));
+    let html='<div class="hm-label"></div>';for(let h=0;h<24;h++)html+=`<div class="hm-hour">${h}</div>`;
+    for(let d=0;d<7;d++){html+=`<div class="hm-label">${DAYS[d]}</div>`;for(let h=0;h<24;h++){const cell=data.find(x=>x.dow===d&&x.hour===h),count=cell?cell.count:0,intensity=count/maxCount,bg=count===0?'var(--bg-primary)':`rgba(59,130,246,${0.12+intensity*0.88})`;html+=`<div class="hm-cell" style="background:${bg}" title="${DAYS[d]} ${h}:00 — ${count} sent">${count||''}</div>`;}}
+    grid.innerHTML=html;
+}
+
+function renderDomains(domains){
+    const el=document.getElementById('domainList');if(!domains.length){el.innerHTML='<div style="color:var(--text-muted);padding:20px;text-align:center;font-size:13px;">No domain data yet</div>';return;}
+    const maxTotal=Math.max(1,...domains.map(d=>(d.sent||0)+(d.delivered||0)));
+    el.innerHTML=domains.slice(0,8).map(d=>{const total=(d.sent||0)+(d.delivered||0),pct=total/maxTotal*100,color=d.bounce_rate>5?'var(--red)':d.bounce_rate>2?'var(--yellow)':'var(--green)';return`<div class="domain-item"><div class="domain-name">${esc(d.domain)}</div><div class="domain-bar-track"><div class="domain-bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="domain-meta">${total} sent &middot; ${d.bounce_rate}%</div></div>`;}).join('');
+}
+
+function renderAlerts(alerts){
+    const el=document.getElementById('alertList'),active=alerts.filter(a=>!a.resolved);document.getElementById('alertCount').textContent=active.length+' active';
+    if(!alerts.length){el.innerHTML='<div style="color:var(--text-muted);padding:20px;text-align:center;font-size:13px;">No alerts — all systems healthy</div>';return;}
+    el.innerHTML=alerts.slice(0,10).map(a=>`<div class="alert-item ${a.level}"><div class="alert-dot"></div><div class="alert-text">${esc(a.message)}</div><span class="alert-time">${a.timestamp.slice(11,19)}</span></div>`).join('');
+}
+
+function renderLog(events){
+    document.getElementById('logBody').innerHTML=events.map(e=>`<tr><td style="white-space:nowrap">${e.timestamp.slice(11,19)}</td><td><span class="badge ${e.event_type}">${e.event_type}</span></td><td>${esc(e.recipient)}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((e.subject||'').slice(0,50))}</td><td>${esc(e.status)}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">No events recorded yet</td></tr>';
+}
+
+function renderHourlyChart(hourly){
+    const ctx=document.getElementById('hourlyChart').getContext('2d'),labels=hourly.map(h=>h.hour?h.hour.slice(11,16):'');
+    if(hourlyChart)hourlyChart.destroy();
+    hourlyChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Sent',data:hourly.map(h=>h.sent),backgroundColor:'rgba(59,130,246,0.7)',borderRadius:4,borderSkipped:false},{label:'Collected',data:hourly.map(h=>h.collected),backgroundColor:'rgba(167,139,250,0.7)',borderRadius:4,borderSkipped:false},{label:'Bounced',data:hourly.map(h=>h.bounced),backgroundColor:'rgba(239,68,68,0.7)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'top',align:'end',labels:{color:'#94a3b8',font:{size:11},boxWidth:12,padding:16}},tooltip:{backgroundColor:'#1e293b',titleColor:'#f1f5f9',bodyColor:'#94a3b8',borderColor:'#334155',borderWidth:1,padding:10,cornerRadius:6}},scales:{x:{ticks:{color:'#475569',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#475569',font:{size:10}},grid:{color:'rgba(30,41,59,0.5)'},beginAtZero:true}}}});
+}
+
+function fetchAll(){
+    fetch('/api/monitor/summary').then(r=>r.json()).then(d=>{document.getElementById('kSent').textContent=d.total_sent;document.getElementById('kDelivery').textContent=d.rates.delivery+'%';document.getElementById('kBounce').textContent=d.rates.bounce+'%';document.getElementById('kBounce').className='kpi-value '+(d.rates.bounce>5?'red':d.rates.bounce>2?'yellow':'green');document.getElementById('kCollected').textContent=d.total_collected;document.getElementById('rDelivery').textContent=d.rates.delivery+'%';document.getElementById('rBounce').textContent=d.rates.bounce+'%';document.getElementById('rReply').textContent=d.rates.reply+'%';renderFunnel(d.funnel);generateInsights(d);});
+    fetch('/api/monitor/hourly').then(r=>r.json()).then(d=>renderHourlyChart(d));
+    fetch('/api/monitor/heatmap').then(r=>r.json()).then(d=>renderHeatmap(d));
+    fetch('/api/monitor/domains').then(r=>r.json()).then(d=>renderDomains(d));
+    fetch('/api/monitor/alerts').then(r=>r.json()).then(d=>renderAlerts(d));
+    fetchLog();document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString();
+}
+function fetchLog(){const url=logFilter?`/api/monitor/log?type=${logFilter}`:'/api/monitor/log';fetch(url).then(r=>r.json()).then(d=>renderLog(d));}
+fetchAll();setInterval(fetchAll,30000);
+</script>
+{% endblock %}

@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+from src.metrics import log_event
 
 # Pre-compiled email regex
 EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
@@ -194,6 +195,7 @@ def enrich_leads(csv_path: str) -> list[dict]:
                 lead["Email"] = emails[0]  # Primary email
                 lead["Email Status"] = "Email Found"
                 emails_found += 1
+                log_event("collected", recipient=emails[0], details=name)
                 print(f"found {len(emails)} email(s): {emails[0]}")
             else:
                 lead["Email"] = ""

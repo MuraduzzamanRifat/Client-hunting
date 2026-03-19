@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — LeadGen AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Pipeline</h1>
+    <div class="page-header-right">
+        <span id="lastRun" style="font-size:12px;color:var(--text-muted)"></span>
+    </div>
+</div>
+
+<!-- Status + Stats -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Status</div>
+        <div id="statusBadge" class="status-badge idle" style="margin-top:4px">Idle</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Leads Scraped</div>
+        <div class="kpi-value blue" id="statScraped">0</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Emails Found</div>
+        <div class="kpi-value green" id="statEmails">0</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Emails Sent</div>
+        <div class="kpi-value purple" id="statSent">0</div>
+    </div>
+</div>
+
+<!-- Run Pipeline -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Run Pipeline</div>
+    </div>
+    <div class="row">
+        <div>
+            <label>Keyword</label>
+            <input type="text" id="keyword" placeholder="e.g., cafes, restaurants">
+        </div>
+        <div>
+            <label>Location</label>
+            <input type="text" id="location" placeholder="e.g., Key West, Florida">
+        </div>
+    </div>
+    <div class="row">
+        <div>
+            <label>Number of Leads</label>
+            <input type="number" id="count" value="20" min="1" max="100">
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <div class="checkbox-row" style="height:42px;align-items:center;">
+                <input type="checkbox" id="sendEmails">
+                <label for="sendEmails" style="margin:0;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text-secondary)">Send emails after scraping</label>
+            </div>
+        </div>
+    </div>
+    <button class="btn-primary" id="runBtn" onclick="runPipeline()">Run Pipeline</button>
+</div>
+
+<!-- Live Log -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Live Log</div>
+    </div>
+    <div class="log-box" id="log">Waiting for pipeline run...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function runPipeline() {
+    const keyword = document.getElementById('keyword').value;
+    const location = document.getElementById('location').value;
+    const count = document.getElementById('count').value;
+    const sendEmails = document.getElementById('sendEmails').checked;
+    if (!keyword || !location) { alert('Enter keyword and location'); return; }
+    fetch('/api/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keyword, location, count: parseInt(count), send_emails: sendEmails})
+    }).then(r => r.json()).then(d => {
+        if (d.status === 'started') pollStatus();
+        else alert(d.message || 'Error');
+    });
+}
+
+function pollStatus() {
+    const interval = setInterval(() => {
+        fetch('/api/status').then(r => r.json()).then(d => {
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = d.running ? 'Running...' : 'Idle';
+            badge.className = 'status-badge ' + (d.running ? 'running' : 'idle');
+            document.getElementById('runBtn').disabled = d.running;
+            if (d.last_run) document.getElementById('lastRun').textContent = 'Last run: ' + d.last_run;
+            if (d.last_result) {
+                document.getElementById('statScraped').textContent = d.last_result.leads_scraped || 0;
+                document.getElementById('statEmails').textContent = d.last_result.emails_found || 0;
+                document.getElementById('statSent').textContent = d.last_result.emails_sent || 0;
+            }
+            const logDiv = document.getElementById('log');
+            if (d.log && d.log.length) {
+                logDiv.innerHTML = d.log.map(l => '<div>' + l + '</div>').join('');
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+            if (!d.running) clearInterval(interval);
+        });
+    }, 2000);
+}
+
+fetch('/api/status').then(r => r.json()).then(d => {
+    if (d.running) pollStatus();
+    if (d.last_result) {
+        document.getElementById('statScraped').textContent = d.last_result.leads_scraped || 0;
+        document.getElementById('statEmails').textContent = d.last_result.emails_found || 0;
+        document.getElementById('statSent').textContent = d.last_result.emails_sent || 0;
+    }
+    if (d.last_run) document.getElementById('lastRun').textContent = 'Last run: ' + d.last_run;
+});
+</script>
+{% endblock %}

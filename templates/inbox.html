@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Inbox — LeadGen AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Email Inbox</h1>
+    <div class="page-header-right">
+        <button class="filter-btn" onclick="fetchInbox()" style="border-color:var(--accent);color:var(--accent)">Refresh</button>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Total</div>
+        <div class="kpi-value blue" id="countTotal">-</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Business</div>
+        <div class="kpi-value" style="color:var(--accent)" id="countBusiness">-</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Personal</div>
+        <div class="kpi-value green" id="countPersonal">-</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Marketing</div>
+        <div class="kpi-value yellow" id="countMarketing">-</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Filters</div>
+    </div>
+    <div class="filters">
+        <button class="filter-btn active" data-cat="all" onclick="setFilter('all')">All</button>
+        <button class="filter-btn" data-cat="business" onclick="setFilter('business')">Business</button>
+        <button class="filter-btn" data-cat="personal" onclick="setFilter('personal')">Personal</button>
+        <button class="filter-btn" data-cat="marketing" onclick="setFilter('marketing')">Marketing</button>
+        <select class="sort-select" id="sortBy" onchange="renderEmails()">
+            <option value="date">Sort by Date</option>
+            <option value="sender">Sort by Sender</option>
+            <option value="category">Sort by Category</option>
+        </select>
+    </div>
+</div>
+
+<!-- Email List -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Emails</div>
+    </div>
+    <div id="emailList" style="min-height:100px;">
+        <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading emails...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentFilter = 'all';
+let allEmails = [];
+
+function setFilter(cat) {
+    currentFilter = cat;
+    document.querySelectorAll('.filter-btn[data-cat]').forEach(b => {
+        b.classList.toggle('active', b.dataset.cat === cat);
+    });
+    renderEmails();
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function renderEmails() {
+    const list = document.getElementById('emailList');
+    const sort = document.getElementById('sortBy').value;
+    let filtered = currentFilter === 'all' ? [...allEmails] : allEmails.filter(e => e.category === currentFilter);
+    if (sort === 'sender') filtered.sort((a, b) => a.sender.localeCompare(b.sender));
+    else if (sort === 'category') filtered.sort((a, b) => a.category.localeCompare(b.category));
+    if (!filtered.length) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No emails found</div>';
+        return;
+    }
+    list.innerHTML = filtered.map(e => `
+        <div class="email-row">
+            <div class="email-header">
+                <span class="badge ${e.category}">${e.category}</span>
+                <span class="email-subject">${esc(e.subject)}</span>
+                <span class="email-date">${esc(e.date)}</span>
+            </div>
+            <div class="email-sender">${esc(e.sender)}</div>
+            <div class="email-snippet">${esc(e.snippet)}</div>
+        </div>
+    `).join('');
+}
+
+function fetchInbox() {
+    const list = document.getElementById('emailList');
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading emails...</div>';
+    fetch('/api/inbox?limit=50').then(r => r.json()).then(data => {
+        allEmails = data.emails || [];
+        document.getElementById('countTotal').textContent = data.counts.total || 0;
+        document.getElementById('countBusiness').textContent = data.counts.business || 0;
+        document.getElementById('countPersonal').textContent = data.counts.personal || 0;
+        document.getElementById('countMarketing').textContent = data.counts.marketing || 0;
+        renderEmails();
+    }).catch(err => {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Failed to load: ' + err.message + '</div>';
+    });
+}
+
+fetchInbox();
+setInterval(fetchInbox, 60000);
+</script>
+{% endblock %}

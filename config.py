@@ -83,9 +83,13 @@ MIN_OUTREACH_SCORE = 50        # minimum score to send email
 MIN_CALL_SCORE = 40            # minimum score for call queue
 
 # ── Email Sending Settings ──────────────────────────────────────────
-MAX_EMAILS_PER_DAY = 50
-EMAIL_DELAY_MIN = 30           # min seconds between sends
-EMAIL_DELAY_MAX = 90           # max seconds between sends
+# Start low during domain warming, increase gradually
+# Week 1: 5, Week 2: 15, Week 3: 30, Week 4+: 50
+MAX_EMAILS_PER_DAY = 5         # WARMING PHASE — increase weekly
+EMAIL_DELAY_MIN = 45           # min seconds between sends
+EMAIL_DELAY_MAX = 120          # max seconds between sends
+MAX_BOUNCE_RATE = 0.03         # stop sending if bounces exceed 3%
+MAX_EMAILS_PER_HOUR = 15       # never exceed this per hour
 # SMTP server — set in .env for your provider
 # Common examples:
 #   Gmail:    smtp.gmail.com     / 587
@@ -96,3 +100,17 @@ EMAIL_DELAY_MAX = 90           # max seconds between sends
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"  # True for port 465
+
+# ── IMAP / Inbox Settings ──────────────────────────────────────────
+IMAP_SERVER = os.getenv("IMAP_SERVER", "mail.mjrifat.com")
+IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+IMAP_USER = os.getenv("IMAP_USER", os.getenv("EMAIL_USER", ""))
+IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", os.getenv("EMAIL_PASSWORD", ""))
+INBOX_FETCH_LIMIT = 50  # max emails to fetch per request
+
+# ── Telegram Bot / Approval Settings ───────────────────────────────
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+# Approval mode: "telegram" = require approval, "auto" = send immediately
+APPROVAL_MODE = os.getenv("APPROVAL_MODE", "telegram")
+APPROVAL_TIMEOUT_HOURS = int(os.getenv("APPROVAL_TIMEOUT_HOURS", "24"))

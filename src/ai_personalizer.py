@@ -224,7 +224,9 @@ def generate_personalized_email(lead_data: dict) -> dict:
     hook = _random_hook(angle, lead_data)
     cta = _random_cta(angle)
 
-    body = f"{intro}\n\n{hook}\n\n{cta}\n\nBest,\n[Your Name]"
+    # Random sign-offs (avoid repetitive patterns)
+    signoff = random.choice(["Best", "Cheers", "Thanks", "Talk soon", "All the best"])
+    body = f"{intro}\n\n{hook}\n\n{cta}\n\n{signoff},\nMj\nmjrifat.com"
     subject = _random_subject(name, angle)
 
     return {"subject": subject, "body": body, "service": service, "angle": angle}

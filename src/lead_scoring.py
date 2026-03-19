@@ -12,6 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
+def calculate_score_advanced(lead: dict) -> dict:
+    """Use the smart scoring engine for detailed scoring."""
+    from src.smart_scorer import smart_score
+    return smart_score(lead)
+
+
 def calculate_score(lead: dict) -> int:
     """
     Calculate a lead quality score (0-100).
@@ -125,19 +131,35 @@ def update_sheet_scores(sheets_mgr) -> dict:
         print("  [!] No leads in sheet.")
         return {"high": 0, "medium": 0, "low": 0}
 
-    # Score each lead
+    # Score each lead using smart scorer
     scores = []
     priorities = []
     outreach_types = []
 
     for lead in leads:
-        score = calculate_score(lead)
-        priority = assign_priority(score)
-        outreach = decide_outreach(lead, score)
+        result = calculate_score_advanced(lead)
+        score = result["score"]
+        priority = result["category"]
+        outreach = _decide_outreach_smart(lead, result)
 
         scores.append(str(score))
         priorities.append(priority)
         outreach_types.append(outreach)
+
+
+def _decide_outreach_smart(lead, result):
+    """Use smart scorer's outreach decision."""
+    contacted = str(lead.get("Contacted", "")).strip().lower()
+    if contacted == "yes":
+        return "Skip"
+    has_email = bool(lead.get("Email"))
+    has_phone = bool(lead.get("Phone"))
+    score = result["score"]
+    if has_email and score >= 50:
+        return "Email"
+    elif not has_email and has_phone and score >= 40:
+        return "Call Queue"
+    return "Skip"
 
     # Batch update columns
     sheets_mgr.batch_update_column("Lead Score", scores)
