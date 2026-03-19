@@ -11,13 +11,6 @@ from datetime import datetime
 
 from flask import Flask, jsonify, request, render_template_string
 
-from src.scraper import fetch_leads, save_to_csv
-from src.email_finder import enrich_leads, save_enriched_csv
-from src.sheets_manager import SheetsManager
-from src.lead_scoring import update_sheet_scores
-from src.email_sender import run_outreach
-import config
-
 app = Flask(__name__)
 
 # ── Pipeline state ───────────────────────────────────────────────────
@@ -41,6 +34,13 @@ def _log(msg: str):
 
 def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool):
     """Run the full pipeline in a background thread."""
+    # Lazy imports to reduce startup memory
+    from src.scraper import fetch_leads, save_to_csv
+    from src.email_finder import enrich_leads, save_enriched_csv
+    from src.sheets_manager import SheetsManager
+    from src.lead_scoring import update_sheet_scores
+    from src.email_sender import run_outreach
+
     pipeline_status["running"] = True
     pipeline_status["log"] = []
     stats = {"leads_scraped": 0, "emails_found": 0, "leads_uploaded": 0, "emails_sent": 0}
