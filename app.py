@@ -288,10 +288,18 @@ def health():
 
 
 # ── Entry point ──────────────────────────────────────────────────────
-if __name__ == "__main__":
-    # Start background scheduler if configured
-    from scheduler import start_scheduler_thread
-    start_scheduler_thread()
+def start_app():
+    """Start Flask app with optional scheduler."""
+    # Start background scheduler (won't crash if Google Sheets not configured)
+    try:
+        from scheduler import start_scheduler_thread
+        start_scheduler_thread()
+    except Exception as e:
+        print(f"[WARNING] Scheduler failed to start: {e}")
 
     port = int(os.getenv("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+if __name__ == "__main__":
+    start_app()
