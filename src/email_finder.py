@@ -66,14 +66,31 @@ def extract_emails(html: str) -> list[str]:
         if any(email.endswith(ext) for ext in config.JUNK_EMAIL_EXTENSIONS):
             continue
 
-        # Skip junk prefixes
         local_part = email.split("@")[0]
+        domain = email.split("@")[1]
+
+        # Skip junk prefixes (noreply, support, admin, etc.)
         if local_part in config.JUNK_EMAIL_PREFIXES:
             continue
 
-        # Skip obviously fake domains
-        domain = email.split("@")[1]
-        if domain in ("example.com", "test.com", "localhost", "sentry.io", "wixpress.com"):
+        # Skip junk domains (wixpress, sentry, example.com, etc.)
+        if domain in config.JUNK_EMAIL_DOMAINS:
+            continue
+        # Also check subdomain matches (e.g. sentry-next.wixpress.com)
+        if any(domain.endswith("." + d) for d in config.JUNK_EMAIL_DOMAINS):
+            continue
+
+        # Skip auto-generated emails (long hex strings like 605a7baede844d27...)
+        if len(local_part) > 20 and all(c in "0123456789abcdef" for c in local_part.replace("-", "")):
+            continue
+
+        # Skip emails where local part matches the domain (user@domain.com pattern)
+        domain_name = domain.split(".")[0]
+        if local_part == domain_name:
+            continue
+
+        # Skip very short local parts (a@, ab@)
+        if len(local_part) < 3:
             continue
 
         valid.append(email)

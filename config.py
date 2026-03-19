@@ -33,6 +33,24 @@ CONTACT_PAGE_KEYWORDS = ["contact", "contact-us", "about", "about-us", "get-in-t
 JUNK_EMAIL_PREFIXES = [
     "noreply", "no-reply", "support", "info", "admin", "webmaster",
     "sales", "help", "contact", "feedback", "abuse", "postmaster",
+    "mailer-daemon", "daemon", "root", "nobody", "hostmaster",
+    "security", "newsletter", "unsubscribe", "billing", "accounts",
+    "do-not-reply", "donotreply", "auto", "automated", "system",
+    "notification", "notifications", "alert", "alerts", "bot",
+]
+JUNK_EMAIL_DOMAINS = [
+    # Website builders / platforms (not real users)
+    "wixpress.com", "wix.com", "squarespace.com", "shopify.com",
+    "weebly.com", "godaddy.com", "wordpress.com", "netlify.com",
+    "webflow.com", "carrd.co", "strikingly.com", "jimdo.com",
+    # Tracking / analytics / dev
+    "sentry.io", "sentry-next.wixpress.com", "cloudflare.com",
+    "googlemail.com", "mailgun.org", "sendgrid.net", "mailchimp.com",
+    "amazonaws.com", "herokuapp.com", "vercel.app",
+    # Fake / placeholder
+    "example.com", "test.com", "localhost", "domain.com",
+    "email.com", "website.com", "yoursite.com", "yourdomain.com",
+    "sample.com", "placeholder.com",
 ]
 JUNK_EMAIL_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".webp"]
 USER_AGENT = (
