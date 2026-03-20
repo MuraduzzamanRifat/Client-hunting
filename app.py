@@ -40,6 +40,12 @@ def _start_background_services():
     except Exception as e:
         print(f"[WARNING] Watchdog failed: {e}")
 
+    try:
+        from scheduler import start_scheduler_thread
+        start_scheduler_thread()
+    except Exception as e:
+        print(f"[WARNING] Scheduler failed: {e}")
+
 
 # Start background services on import (for gunicorn)
 _start_background_services()
