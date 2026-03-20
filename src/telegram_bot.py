@@ -130,6 +130,15 @@ def _is_duplicate(recipient: str) -> bool:
 def queue_email(recipient: str, subject: str, body: str, lead_data: dict = None,
                 service: str = "", angle: str = "", sheet_row: int = 0) -> int:
     """Add email to approval queue and notify Telegram. Skips duplicates."""
+    # Reject malformed email addresses before they enter the queue
+    import re as _re
+    from urllib.parse import unquote as _unquote
+    clean_recipient = _unquote(recipient).strip()
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', clean_recipient):
+        print(f"  [QUEUE] Rejected malformed email: {recipient!r}")
+        return -1
+    recipient = clean_recipient
+
     if _is_duplicate(recipient):
         print(f"  [QUEUE] Skipping duplicate: {recipient}")
         return -1

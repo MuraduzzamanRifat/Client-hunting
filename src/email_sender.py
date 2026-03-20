@@ -137,17 +137,27 @@ def send_email(smtp_conn, to_email: str, subject: str, body: str, from_email: st
     body_with_unsub = body + "\n\n---\nDon't want to hear from me? Just reply 'unsubscribe' and I'll remove you immediately."
     msg.attach(MIMEText(body_with_unsub, "plain", "utf-8"))
 
+    # Validate email address before attempting send
+    import re as _re
+    from urllib.parse import unquote as _unquote
+    clean_to = _unquote(to_email).strip()
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', clean_to):
+        log.warning(f"  Rejected malformed email address: {to_email!r}")
+        return False
+    # Use the cleaned address
+    msg.replace_header("To", clean_to)
+
     raw = msg.as_bytes()
 
     try:
-        smtp_conn.sendmail(from_email, to_email, raw)
+        smtp_conn.sendmail(from_email, clean_to, raw)
         # Save copy to Sent folder via IMAP
         saved = _save_to_sent(raw)
         if not saved:
-            log.warning(f"  Sent to {to_email} but could not save to Sent folder")
+            log.warning(f"  Sent to {clean_to} but could not save to Sent folder")
         return True
-    except smtplib.SMTPException as e:
-        log.warning(f"  Failed to send to {to_email}: {e}")
+    except (smtplib.SMTPException, OSError, ConnectionResetError, TimeoutError) as e:
+        log.warning(f"  Failed to send to {clean_to}: {type(e).__name__}: {e}")
         return False
 
 
