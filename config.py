@@ -26,6 +26,9 @@ REQUEST_TIMEOUT = 10           # seconds before request times out
 MAX_RETRIES = 3                # retry attempts on API failure
 RETRY_BACKOFF = 2              # exponential backoff multiplier
 
+# Seconds to wait between collecting an email and sending it (human-like pacing)
+SEND_DELAY_AFTER_COLLECT = 8
+
 # ── Email Finder Settings ───────────────────────────────────────────
 CRAWL_DELAY_MIN = 1.0          # min seconds between website visits
 CRAWL_DELAY_MAX = 2.0          # max seconds between website visits

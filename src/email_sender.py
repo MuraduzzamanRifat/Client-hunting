@@ -310,6 +310,43 @@ def run_outreach_with_approval(sheets_mgr, max_emails: int = 0) -> dict:
     return {"queued": queued, "skipped": len(qualified) - queued}
 
 
+def send_single_lead(lead: dict, smtp_conn, from_addr: str) -> bool:
+    """
+    Generate and send a personalized email for one lead immediately.
+    Used by the 1:1 inline pipeline (collect → send).
+
+    Returns True on success, False on skip/failure.
+    """
+    email_addr = str(lead.get("Email", "")).strip()
+
+    if not email_addr or not EMAIL_VALID_RE.match(email_addr):
+        return False
+    if not _is_safe_email(email_addr):
+        log.info(f"  Skipping risky email: {email_addr}")
+        return False
+    if email_addr.lower() in _sent_this_session:
+        log.info(f"  Duplicate skip: {email_addr}")
+        return False
+
+    _sent_this_session.add(email_addr.lower())
+
+    content = generate_personalized_email(lead)
+    success = send_email(smtp_conn, email_addr, content["subject"], content["body"], from_addr)
+
+    if success:
+        log_event("sent", recipient=email_addr, subject=content["subject"], status="ok")
+        log.info(f"  Sent to {email_addr} ({content.get('service', '')} angle)")
+    else:
+        log_event("bounced", recipient=email_addr, subject=content["subject"], status="failed")
+
+    return success
+
+
+def open_smtp_connection():
+    """Open and return a persistent SMTP connection. Returns None on failure."""
+    return _connect_smtp()
+
+
 # ── Standalone test ──────────────────────────────────────────────────
 if __name__ == "__main__":
     print("Email sender module. Run via main.py for full pipeline.")

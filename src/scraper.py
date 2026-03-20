@@ -62,18 +62,16 @@ def _parse_results(raw: dict) -> list[dict]:
     """Extract structured lead data from Serper.dev Maps response."""
     leads = []
     for place in raw.get("places", []):
+        links = place.get("links") or {}
         lead = {
             "Name": (place.get("title") or "").strip(),
             "Address": (place.get("address") or "").strip(),
             "Phone": (place.get("phoneNumber") or "").strip(),
             "Website": (place.get("website") or "").strip(),
-            "Rating": place.get("rating", ""),
-            "Reviews": place.get("ratingCount", ""),
+            "Facebook": (links.get("facebook") or "").strip(),
+            "Rating": place.get("rating", "") or "",
+            "Reviews": place.get("ratingCount", "") or "",
         }
-        if lead["Rating"] is None:
-            lead["Rating"] = ""
-        if lead["Reviews"] is None:
-            lead["Reviews"] = ""
         leads.append(lead)
     return leads
 

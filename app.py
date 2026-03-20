@@ -69,22 +69,31 @@ def _log(msg: str):
     print(entry)
 
 
-def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool):
-    """Run the full pipeline in a background thread."""
-    # Lazy imports to reduce startup memory
+def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = True):
+    """
+    1:1 Autonomous pipeline — for every lead scraped, if an email is found it is
+    sent immediately (after a short delay). No manual trigger needed.
+
+    Logic per lead:
+      • Email found          → generate (SEO or web-creation angle) → send → sheet: Email Sent
+      • No email + phone     → sheet: Call Queue
+      • No email + no phone + no website + no facebook → skip entirely
+      • Otherwise            → sheet: Needs Review
+    """
     from src.scraper import fetch_leads, save_to_csv
-    from src.email_finder import enrich_leads, save_enriched_csv
+    from src.email_finder import find_email_for_lead
     from src.sheets_manager import SheetsManager
-    from src.lead_scoring import update_sheet_scores
-    from src.email_sender import run_outreach
+    from src.lead_scoring import score_all_leads
+    from src.email_sender import open_smtp_connection, send_single_lead
+    from src.metrics import log_event, log_run
 
     pipeline_status["running"] = True
     pipeline_status["log"] = []
     stats = {"leads_scraped": 0, "emails_found": 0, "leads_uploaded": 0, "emails_sent": 0}
 
     try:
-        # Step 1: Scrape
-        _log(f"Step 1: Scraping '{keyword}' in '{location}' ({count} leads)...")
+        # ── Step 1: Scrape ───────────────────────────────────────
+        _log(f"Scraping '{keyword}' in '{location}' ({count} leads)...")
         leads = fetch_leads(keyword, location, count)
         stats["leads_scraped"] = len(leads)
         _log(f"Scraped {len(leads)} leads")
@@ -93,55 +102,126 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool):
             _log("No leads found. Stopping.")
             return
 
-        csv_path = save_to_csv(leads, keyword, location)
-
-        # Step 2: Enrich
-        _log("Step 2: Enriching leads with emails...")
-        enriched = enrich_leads(csv_path)
-        stats["emails_found"] = sum(1 for l in enriched if l.get("Email"))
-        _log(f"Emails found: {stats['emails_found']}/{len(enriched)}")
-
-        enriched_path = save_enriched_csv(enriched)
-
-        # Step 3: Upload to Sheets
-        _log("Step 3: Uploading to Google Sheets...")
+        # ── Step 2: Connect Google Sheets ────────────────────────
         sheets = SheetsManager()
         if not sheets.authenticate():
             _log("Google Sheets auth failed!")
             return
         sheets.open_or_create_sheet()
-        raw = sheets.load_csv(enriched_path)
-        clean = sheets.clean_data(raw)
-        sheets.upload_to_sheets(clean)
-        stats["leads_uploaded"] = len(clean)
-        _log(f"Uploaded {len(clean)} leads to sheet")
 
-        # Step 4: Score
-        _log("Step 4: Scoring leads...")
-        update_sheet_scores(sheets)
-        _log("Scoring complete")
+        # ── Step 3: Connect SMTP once for the whole batch ────────
+        smtp = open_smtp_connection()
+        if not smtp:
+            _log("WARNING: SMTP connection failed — leads will be saved but emails skipped")
+        from_addr = os.getenv("EMAIL_FROM") or os.getenv("EMAIL_USER", "")
 
-        # Step 5: Send emails (with Telegram approval if configured)
-        if send_emails:
-            from src.email_sender import run_outreach_with_approval
-            _log(f"Step 5: Processing emails (mode: {os.getenv('APPROVAL_MODE', 'telegram')})...")
-            result = run_outreach_with_approval(sheets)
-            if "queued" in result:
-                stats["emails_sent"] = result.get("queued", 0)
-                _log(f"Emails queued for approval: {stats['emails_sent']}")
+        # ── Step 4: Process each lead inline (1:1) ───────────────
+        for i, lead in enumerate(leads, 1):
+            name = lead.get("Name", "Unknown")
+            website = lead.get("Website", "").strip()
+            phone = lead.get("Phone", "").strip()
+            facebook = lead.get("Facebook", "").strip()
+
+            _log(f"[{i}/{len(leads)}] {name}...")
+
+            # Find email from website
+            email = find_email_for_lead(lead) if website else ""
+
+            if email:
+                lead["Email"] = email
+                lead["Email Status"] = "Email Found"
+                stats["emails_found"] += 1
+                log_event("collected", recipient=email, details=name)
+                _log(f"  Email found: {email}")
+
+                # Score the lead to set Priority / Outreach Type
+                scored = score_all_leads([lead])
+                lead.update(scored[0])
+                lead["Status"] = "New"
+
+                # Upload to sheet first
+                sheets.upload_to_sheets(sheets.clean_data([lead]))
+                stats["leads_uploaded"] += 1
+
+                # Wait then send
+                if smtp and from_addr:
+                    import time
+                    time.sleep(config.SEND_DELAY_AFTER_COLLECT)
+                    success = send_single_lead(lead, smtp, from_addr)
+                    if success:
+                        stats["emails_sent"] += 1
+                        _log(f"  Sent ({'SEO' if website else 'web creation'} angle)")
+                        # Update sheet row status
+                        all_leads = sheets.read_leads()
+                        for idx, row in enumerate(all_leads):
+                            if row.get("Email", "").lower() == email.lower():
+                                sheets.update_row(idx + 2, {
+                                    "Status": "Email Sent",
+                                    "Contacted": "Yes",
+                                    "Outreach Type": "Email",
+                                })
+                                break
+                    else:
+                        _log(f"  Send failed for {email}")
+                else:
+                    _log(f"  Saved to sheet (SMTP unavailable)")
+
+            elif phone:
+                # No email but has phone → Call Queue
+                lead["Email"] = ""
+                lead["Email Status"] = "No Email Found"
+                lead["Status"] = "New"
+                lead["Outreach Type"] = "Call Queue"
+                lead["Contact Method"] = "Phone"
+                sheets.upload_to_sheets(sheets.clean_data([lead]))
+                stats["leads_uploaded"] += 1
+                _log(f"  No email — added to Call Queue (phone: {phone})")
+
+            elif not website and not facebook:
+                # Nothing useful — skip
+                _log(f"  Skipped — no email, phone, website, or Facebook")
+                continue
+
             else:
-                stats["emails_sent"] = result.get("sent", 0)
-                _log(f"Emails sent: {stats['emails_sent']}")
-        else:
-            _log("Step 5: Email sending skipped")
+                # Has website/facebook but no email found — save for review
+                lead["Email"] = ""
+                lead["Email Status"] = "No Email Found"
+                lead["Status"] = "New"
+                lead["Outreach Type"] = "Needs Review"
+                sheets.upload_to_sheets(sheets.clean_data([lead]))
+                stats["leads_uploaded"] += 1
+                _log(f"  No email found — saved for review")
+
+        # ── Step 5: Score remaining unscored rows ─────────────────
+        try:
+            from src.lead_scoring import update_sheet_scores
+            update_sheet_scores(sheets)
+        except Exception:
+            pass
+
+        # Close SMTP
+        if smtp:
+            try:
+                smtp.quit()
+            except Exception:
+                pass
+
+        log_run(keyword, location, stats["leads_scraped"], stats["emails_found"],
+                "success", leads_uploaded=stats["leads_uploaded"])
 
     except Exception as e:
         _log(f"ERROR: {e}")
+        try:
+            from src.metrics import log_run
+            log_run(keyword, location, stats.get("leads_scraped", 0),
+                    stats.get("emails_found", 0), "error", error=str(e))
+        except Exception:
+            pass
     finally:
         pipeline_status["running"] = False
         pipeline_status["last_run"] = datetime.now().isoformat()
         pipeline_status["last_result"] = stats
-        _log(f"Pipeline complete: {stats}")
+        _log(f"Done — {stats['leads_scraped']} scraped | {stats['emails_found']} emails | {stats['emails_sent']} sent")
 
 
 # ── Dashboard HTML ───────────────────────────────────────────────────
@@ -331,6 +411,44 @@ def api_run():
     )
     thread.start()
 
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/send", methods=["POST"])
+def api_send():
+    """Send emails to qualified leads already in the sheet (no re-scraping)."""
+    if pipeline_status["running"]:
+        return jsonify({"status": "error", "message": "Pipeline already running"}), 409
+
+    def _do_send():
+        from src.sheets_manager import SheetsManager
+        from src.email_sender import run_outreach_with_approval
+
+        pipeline_status["running"] = True
+        pipeline_status["log"] = []
+        try:
+            _log("Connecting to Google Sheets...")
+            sheets = SheetsManager()
+            if not sheets.authenticate():
+                _log("ERROR: Google Sheets auth failed")
+                return
+            sheets.open_or_create_sheet()
+
+            _log(f"Sending emails (approval mode: {os.getenv('APPROVAL_MODE', 'telegram')})...")
+            result = run_outreach_with_approval(sheets)
+
+            if "queued" in result:
+                _log(f"Queued {result['queued']} email(s) for Telegram approval")
+                _log("Check Telegram — tap ✅ to approve each one")
+            else:
+                _log(f"Sent: {result.get('sent', 0)} | Failed: {result.get('failed', 0)}")
+        except Exception as e:
+            _log(f"ERROR: {e}")
+        finally:
+            pipeline_status["running"] = False
+            pipeline_status["last_run"] = datetime.now().isoformat()
+
+    threading.Thread(target=_do_send, daemon=True).start()
     return jsonify({"status": "started"})
 
 

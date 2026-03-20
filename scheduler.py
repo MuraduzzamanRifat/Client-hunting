@@ -88,10 +88,8 @@ def run_scheduled_pipeline():
     """Read targets from Google Sheet and run pipeline for each."""
     # Lazy imports to keep startup fast
     from src.scraper import fetch_leads, save_to_csv
-    from src.email_finder import enrich_leads, save_enriched_csv
     from src.sheets_manager import SheetsManager
-    from src.lead_scoring import update_sheet_scores
-    from src.email_sender import run_outreach
+    from src.lead_scoring import update_sheet_scores, score_all_leads
     from src.metrics import log_run
     import config
 
@@ -132,6 +130,14 @@ def run_scheduled_pipeline():
     total_emails = 0
     run_results = []  # [(keyword, location, leads, emails, status)]
 
+    # Open SMTP once for the entire batch
+    from src.email_sender import open_smtp_connection, send_single_lead
+    import os as _os
+    smtp = open_smtp_connection()
+    from_addr = _os.getenv("EMAIL_FROM") or _os.getenv("EMAIL_USER", "")
+    if not smtp:
+        print("  [SCHEDULER] WARNING: SMTP unavailable — leads saved but emails skipped")
+
     for i, target in enumerate(targets, 1):
         keyword = target["keyword"]
         location = target["location"]
@@ -147,31 +153,81 @@ def run_scheduled_pipeline():
                 log_run(keyword, location, 0, 0, "no_results")
                 run_results.append((keyword, location, 0, 0, "no_results"))
                 continue
-            csv_path = save_to_csv(leads, keyword, location)
-            total_scraped += len(leads)
 
-            # Step 2: Enrich
-            enriched = enrich_leads(csv_path)
-            enriched_path = save_enriched_csv(enriched)
-            emails_found = sum(1 for l in enriched if l.get("Email"))
+            total_scraped += len(leads)
+            save_to_csv(leads, keyword, location)
+
+            # Step 2: Process each lead inline (1:1 collect → send)
+            from src.email_finder import find_email_for_lead
+            from src.metrics import log_event
+            import time as _time
+
+            emails_found = 0
+            uploaded = 0
+
+            for lead in leads:
+                name = lead.get("Name", "Unknown")
+                website = lead.get("Website", "").strip()
+                phone = lead.get("Phone", "").strip()
+                facebook = lead.get("Facebook", "").strip()
+
+                email = find_email_for_lead(lead) if website else ""
+
+                if email:
+                    lead["Email"] = email
+                    lead["Email Status"] = "Email Found"
+                    emails_found += 1
+                    log_event("collected", recipient=email, details=name)
+
+                    scored = score_all_leads([lead])
+                    lead.update(scored[0])
+                    lead["Status"] = "New"
+                    sheets.upload_to_sheets(sheets.clean_data([lead]))
+                    uploaded += 1
+
+                    if smtp and from_addr:
+                        _time.sleep(config.SEND_DELAY_AFTER_COLLECT)
+                        success = send_single_lead(lead, smtp, from_addr)
+                        if success:
+                            all_leads = sheets.read_leads()
+                            for idx, row in enumerate(all_leads):
+                                if row.get("Email", "").lower() == email.lower():
+                                    sheets.update_row(idx + 2, {
+                                        "Status": "Email Sent",
+                                        "Contacted": "Yes",
+                                        "Outreach Type": "Email",
+                                    })
+                                    break
+                            print(f"  Sent to {email}")
+
+                elif phone:
+                    lead["Email"] = ""
+                    lead["Email Status"] = "No Email Found"
+                    lead["Status"] = "New"
+                    lead["Outreach Type"] = "Call Queue"
+                    lead["Contact Method"] = "Phone"
+                    sheets.upload_to_sheets(sheets.clean_data([lead]))
+                    uploaded += 1
+
+                elif not website and not facebook:
+                    print(f"  Skipped {name} — no contact data")
+                    continue
+
+                else:
+                    lead["Email"] = ""
+                    lead["Email Status"] = "No Email Found"
+                    lead["Status"] = "New"
+                    lead["Outreach Type"] = "Needs Review"
+                    sheets.upload_to_sheets(sheets.clean_data([lead]))
+                    uploaded += 1
+
+            # Step 3: Score sheet
+            update_sheet_scores(sheets)
             total_emails += emails_found
 
-            # Step 3: Upload (reuse same sheets connection)
-            raw = sheets.load_csv(enriched_path)
-            clean = sheets.clean_data(raw)
-            sheets.upload_to_sheets(clean)
-
-            # Step 4: Score
-            update_sheet_scores(sheets)
-
-            # Step 5: Send emails
-            if SCHEDULE_SEND_EMAILS:
-                run_outreach(sheets)
-
-            log_run(keyword, location, len(leads), emails_found, "success",
-                    leads_uploaded=len(clean))
+            log_run(keyword, location, len(leads), emails_found, "success", leads_uploaded=uploaded)
             run_results.append((keyword, location, len(leads), emails_found, "success"))
-            print(f"  Done: {len(leads)} scraped, {emails_found} emails found")
+            print(f"  Done: {len(leads)} scraped, {emails_found} emails found/sent")
 
         except Exception as e:
             err_msg = str(e)
@@ -179,6 +235,13 @@ def run_scheduled_pipeline():
             log_run(keyword, location, 0, 0, "error", error=err_msg)
             run_results.append((keyword, location, 0, 0, f"error: {err_msg[:60]}"))
             continue
+
+    # Close SMTP
+    if smtp:
+        try:
+            smtp.quit()
+        except Exception:
+            pass
 
     duration = int((datetime.now() - run_start).total_seconds())
 

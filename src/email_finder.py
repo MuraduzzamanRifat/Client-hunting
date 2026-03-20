@@ -156,6 +156,20 @@ def _scrape_emails_from_site(website: str) -> list[str]:
     return unique
 
 
+def find_email_for_lead(lead: dict) -> str:
+    """
+    Find an email for a single lead dict.
+    Visits the website (homepage + contact page) and returns the first valid email,
+    or "" if none found.
+    """
+    website = lead.get("Website", "").strip()
+    if not website:
+        return ""
+
+    emails = _scrape_emails_from_site(website)
+    return emails[0] if emails else ""
+
+
 def enrich_leads(csv_path: str) -> list[dict]:
     """
     Read a CSV of leads, visit each website, extract emails.
