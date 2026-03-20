@@ -6,6 +6,7 @@ via the AI personalizer, sends via any SMTP provider, and updates the sheet.
 Supports Gmail, Outlook, Yahoo, Zoho, or any custom webmail/SMTP server.
 """
 
+import imaplib
 import os
 import re
 import smtplib
@@ -78,25 +79,72 @@ def read_qualified_leads(sheets_mgr) -> list[tuple[int, dict]]:
     return qualified
 
 
+def _save_to_sent(raw_message: bytes) -> bool:
+    """
+    Append a copy of the sent message to the IMAP Sent folder.
+    This is the only way to get it to appear in the webmail Sent box
+    — smtplib does NOT do this automatically.
+    """
+    try:
+        if config.SMTP_USE_SSL:
+            imap = imaplib.IMAP4_SSL(config.IMAP_SERVER, config.IMAP_PORT)
+        else:
+            imap = imaplib.IMAP4(config.IMAP_SERVER, config.IMAP_PORT)
+
+        imap.login(config.IMAP_USER or config.EMAIL_USER,
+                   config.IMAP_PASSWORD or config.EMAIL_PASSWORD)
+
+        # Try common Sent folder names (INBOX.Sent confirmed for mjrifat.com)
+        sent_folders = ["INBOX.Sent", "Sent", "Sent Items", "Sent Messages"]
+        appended = False
+        for folder in sent_folders:
+            try:
+                result = imap.append(
+                    folder,
+                    "\\Seen",
+                    imaplib.Time2Internaldate(time.time()),
+                    raw_message,
+                )
+                if result[0] == "OK":
+                    appended = True
+                    break
+            except Exception:
+                continue
+
+        imap.logout()
+        return appended
+    except Exception as e:
+        log.warning(f"  IMAP save-to-sent failed: {e}")
+        return False
+
+
 def send_email(smtp_conn, to_email: str, subject: str, body: str, from_email: str) -> bool:
-    """Send a single email via SMTP. Returns True on success."""
+    """
+    Send a single email via SMTP and save a copy to IMAP Sent folder.
+    Returns True on success.
+    """
     msg = MIMEMultipart("alternative")
     msg["From"] = f"Mj <{from_email}>"
     msg["To"] = to_email
     msg["Subject"] = subject
     msg["Reply-To"] = from_email
+    msg["Date"] = datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")
 
     # Unsubscribe header (required by Gmail/Yahoo since Feb 2024)
     msg["List-Unsubscribe"] = f"<mailto:{from_email}?subject=Unsubscribe>"
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
-    # Add unsubscribe line to body
     body_with_unsub = body + "\n\n---\nDon't want to hear from me? Just reply 'unsubscribe' and I'll remove you immediately."
-
     msg.attach(MIMEText(body_with_unsub, "plain", "utf-8"))
 
+    raw = msg.as_bytes()
+
     try:
-        smtp_conn.sendmail(from_email, to_email, msg.as_string())
+        smtp_conn.sendmail(from_email, to_email, raw)
+        # Save copy to Sent folder via IMAP
+        saved = _save_to_sent(raw)
+        if not saved:
+            log.warning(f"  Sent to {to_email} but could not save to Sent folder")
         return True
     except smtplib.SMTPException as e:
         log.warning(f"  Failed to send to {to_email}: {e}")
