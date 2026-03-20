@@ -29,7 +29,11 @@ APPROVALS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 CHECK_INTERVAL = 60  # seconds between checks
 DAILY_REPORT_HOUR = 9  # send daily report at 9 AM
+NO_ACTIVITY_HOURS = 3  # alert if no pipeline activity for this many hours
+ACTIVE_HOURS_START = 7  # only alert during these hours (7 AM – 11 PM)
+ACTIVE_HOURS_END = 23
 _last_daily_report = None
+_last_no_activity_alert = None  # prevents repeated alerts
 _system_paused = False
 _original_daily_cap = config.MAX_EMAILS_PER_DAY
 
@@ -360,6 +364,44 @@ def _check_followup_limits():
         pass
 
 
+def _check_no_activity():
+    """Alert if no pipeline activity in the last NO_ACTIVITY_HOURS hours."""
+    global _last_no_activity_alert
+
+    now = datetime.now()
+    # Only check during active hours
+    if not (ACTIVE_HOURS_START <= now.hour < ACTIVE_HOURS_END):
+        return
+    # Don't alert if already alerted within the past NO_ACTIVITY_HOURS
+    if _last_no_activity_alert:
+        since_last = (now - _last_no_activity_alert).total_seconds() / 3600
+        if since_last < NO_ACTIVITY_HOURS:
+            return
+
+    try:
+        from src.metrics import get_last_activity_time
+        last_ts = get_last_activity_time()
+        if last_ts is None:
+            # No activity ever — only alert if app has been up for more than NO_ACTIVITY_HOURS
+            return
+
+        last_dt = datetime.fromisoformat(last_ts)
+        idle_hours = (now - last_dt).total_seconds() / 3600
+
+        if idle_hours >= NO_ACTIVITY_HOURS:
+            _last_no_activity_alert = now
+            idle_str = f"{idle_hours:.1f}h"
+            _notify(
+                "warning",
+                f"No pipeline activity for {idle_str}",
+                f"Last activity: {last_dt.strftime('%H:%M')} ({idle_str} ago)",
+                "Check scheduler targets and Serper API key",
+                f"Last seen: {last_dt.strftime('%Y-%m-%d %H:%M')}",
+            )
+    except Exception as e:
+        print(f"[WATCHDOG] No-activity check error: {e}")
+
+
 # ── Main Check Cycle ─────────────────────────────────────────────────
 
 def run_check():
@@ -370,6 +412,7 @@ def run_check():
     _check_error_rate()
     _check_duplicates()
     _check_followup_limits()
+    _check_no_activity()
 
     # Auto-resume if conditions improved and system was paused
     if _system_paused:

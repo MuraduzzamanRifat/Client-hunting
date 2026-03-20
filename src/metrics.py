@@ -53,9 +53,23 @@ def init_db():
             resolved INTEGER DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            keyword TEXT NOT NULL,
+            location TEXT NOT NULL,
+            leads_scraped INTEGER DEFAULT 0,
+            emails_found INTEGER DEFAULT 0,
+            leads_uploaded INTEGER DEFAULT 0,
+            status TEXT NOT NULL,
+            error TEXT DEFAULT '',
+            source TEXT DEFAULT 'scheduler'
+        );
+
         CREATE INDEX IF NOT EXISTS idx_events_ts ON email_events(timestamp);
         CREATE INDEX IF NOT EXISTS idx_events_type ON email_events(event_type);
         CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics_log(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_runs_ts ON pipeline_runs(timestamp);
     """)
     conn.close()
 
@@ -94,6 +108,45 @@ def log_event(event_type: str, recipient: str = "", subject: str = "",
 
     # Check alert thresholds after each event
     _check_alerts()
+
+
+def log_run(keyword: str, location: str, leads_scraped: int, emails_found: int,
+            status: str, error: str = "", leads_uploaded: int = 0, source: str = "scheduler"):
+    """Log a pipeline run (scheduler or manual)."""
+    with _lock:
+        conn = _get_db()
+        conn.execute(
+            "INSERT INTO pipeline_runs (timestamp, keyword, location, leads_scraped, emails_found, "
+            "leads_uploaded, status, error, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(), keyword, location, leads_scraped, emails_found,
+             leads_uploaded, status, error, source)
+        )
+        conn.commit()
+        conn.close()
+
+
+def get_run_log(limit: int = 20) -> list[dict]:
+    """Get recent pipeline runs."""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT * FROM pipeline_runs ORDER BY timestamp DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_last_activity_time() -> str | None:
+    """Return ISO timestamp of the last pipeline activity (run, collected, or sent event)."""
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT MAX(timestamp) as last_ts FROM ("
+        "  SELECT timestamp FROM pipeline_runs "
+        "  UNION ALL "
+        "  SELECT timestamp FROM email_events WHERE event_type IN ('sent', 'collected')"
+        ")"
+    ).fetchone()
+    conn.close()
+    return row["last_ts"] if row else None
 
 
 def log_metric(metric: str, value: float):

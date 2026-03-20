@@ -69,6 +69,21 @@ def _read_targets(sheets_mgr) -> list[dict]:
         return []
 
 
+def _tg_notify(text: str):
+    """Send a Telegram notification (best-effort)."""
+    try:
+        import requests as _req
+        import config as _cfg
+        if _cfg.TELEGRAM_BOT_TOKEN and _cfg.TELEGRAM_CHAT_ID:
+            _req.post(
+                f"https://api.telegram.org/bot{_cfg.TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": _cfg.TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"},
+                timeout=10,
+            )
+    except Exception as e:
+        print(f"  [SCHEDULER] Telegram notify failed: {e}")
+
+
 def run_scheduled_pipeline():
     """Read targets from Google Sheet and run pipeline for each."""
     # Lazy imports to keep startup fast
@@ -77,15 +92,21 @@ def run_scheduled_pipeline():
     from src.sheets_manager import SheetsManager
     from src.lead_scoring import update_sheet_scores
     from src.email_sender import run_outreach
+    from src.metrics import log_run
     import config
+
+    run_start = datetime.now()
     print(f"\n{'='*60}")
-    print(f"  SCHEDULED RUN — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  SCHEDULED RUN — {run_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}\n")
 
     # Connect to Sheets
     sheets = SheetsManager()
     if not sheets.authenticate():
+        msg = "⚠️ <b>Scheduler</b>: Google Sheets auth failed — skipping run"
         print("  [SCHEDULER] Google Sheets auth failed!")
+        _tg_notify(msg)
+        log_run("(auth)", "(failed)", 0, 0, "error", "Google Sheets auth failed")
         return
     sheets.open_or_create_sheet()
 
@@ -96,6 +117,10 @@ def run_scheduled_pipeline():
     targets = _read_targets(sheets)
     if not targets:
         print("  [SCHEDULER] No active targets found in Targets tab. Add rows and set Active=Yes.")
+        _tg_notify(
+            "ℹ️ <b>Scheduler</b>: No active targets in Targets sheet.\n"
+            "Add rows with <code>Active = Yes</code> to start collecting leads."
+        )
         return
 
     print(f"  Active targets: {len(targets)}")
@@ -105,6 +130,7 @@ def run_scheduled_pipeline():
     # Run pipeline for each target
     total_scraped = 0
     total_emails = 0
+    run_results = []  # [(keyword, location, leads, emails, status)]
 
     for i, target in enumerate(targets, 1):
         keyword = target["keyword"]
@@ -118,6 +144,8 @@ def run_scheduled_pipeline():
             leads = fetch_leads(keyword, location, count)
             if not leads:
                 print(f"  No leads found. Skipping.")
+                log_run(keyword, location, 0, 0, "no_results")
+                run_results.append((keyword, location, 0, 0, "no_results"))
                 continue
             csv_path = save_to_csv(leads, keyword, location)
             total_scraped += len(leads)
@@ -140,17 +168,39 @@ def run_scheduled_pipeline():
             if SCHEDULE_SEND_EMAILS:
                 run_outreach(sheets)
 
+            log_run(keyword, location, len(leads), emails_found, "success",
+                    leads_uploaded=len(clean))
+            run_results.append((keyword, location, len(leads), emails_found, "success"))
             print(f"  Done: {len(leads)} scraped, {emails_found} emails found")
 
         except Exception as e:
-            print(f"  [ERROR] Failed for '{keyword}' in '{location}': {e}")
+            err_msg = str(e)
+            print(f"  [ERROR] Failed for '{keyword}' in '{location}': {err_msg}")
+            log_run(keyword, location, 0, 0, "error", error=err_msg)
+            run_results.append((keyword, location, 0, 0, f"error: {err_msg[:60]}"))
             continue
+
+    duration = int((datetime.now() - run_start).total_seconds())
 
     print(f"\n{'='*60}")
     print(f"  SCHEDULED RUN COMPLETE")
     print(f"  Total scraped: {total_scraped} | Total emails: {total_emails}")
     print(f"  Next run in {SCHEDULE_HOURS} hours")
     print(f"{'='*60}")
+
+    # Send Telegram run summary
+    lines = [f"📋 <b>Scheduler Run Complete</b>"]
+    lines.append(f"🕐 {run_start.strftime('%H:%M')} | ⏱ {duration}s | {len(targets)} target(s)\n")
+    for kw, loc, scraped, emails, status in run_results:
+        icon = "✅" if status == "success" else ("⚠️" if status == "no_results" else "❌")
+        lines.append(f"{icon} <b>{kw}</b> / {loc}")
+        if status == "success":
+            lines.append(f"   Scraped: {scraped} | Emails: {emails}")
+        else:
+            lines.append(f"   {status}")
+    lines.append(f"\n<b>Total:</b> {total_scraped} leads | {total_emails} emails")
+    lines.append(f"⏭ Next run in {SCHEDULE_HOURS}h")
+    _tg_notify("\n".join(lines))
 
 
 def start_scheduler_loop():
