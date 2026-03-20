@@ -29,7 +29,7 @@ APPROVALS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 CHECK_INTERVAL = 60  # seconds between checks
 DAILY_REPORT_HOUR = 9  # send daily report at 9 AM
-NO_ACTIVITY_HOURS = 3  # alert if no pipeline activity for this many hours
+NO_ACTIVITY_HOURS = 2  # alert if no pipeline activity for this many hours
 ACTIVE_HOURS_START = 7  # only alert during these hours (7 AM – 11 PM)
 ACTIVE_HOURS_END = 23
 _last_daily_report = None
