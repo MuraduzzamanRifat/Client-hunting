@@ -184,10 +184,10 @@ class SheetsManager:
                 lead.get("Email", ""),
                 lead.get("Rating", ""),
                 lead.get("Reviews", ""),
-                "",  # Lead Score (filled by scoring module)
-                "",  # Priority
-                "",  # Outreach Type
-                "New",
+                lead.get("Lead Score", ""),          # pre-filled if scored inline
+                lead.get("Priority", ""),            # pre-filled if scored inline
+                lead.get("Outreach Type", ""),       # Call Queue / Email / Needs Review
+                lead.get("Status", "New"),
                 self._determine_contact_method(lead),
                 "No",
                 "",  # Notes

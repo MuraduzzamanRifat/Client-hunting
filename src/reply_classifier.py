@@ -22,6 +22,11 @@ INTERESTED_PATTERNS = [
     r"\bi'?d (love|like) to\b", r"\bshow me\b", r"\bwhat (would|does) it cost\b",
     r"\bhow much\b", r"\bpric(e|ing)\b", r"\bquote\b", r"\bportfolio\b",
     r"\bexamples?\b", r"\bgo ahead\b", r"\blet'?s do it\b",
+    # User-specified interest signals
+    r"\bdetails?\b", r"\bdetails please\b", r"\bhow can you help\b",
+    r"\bprice\?", r"\bwhat'?s (the )?cost\b", r"\bwhat do you charge\b",
+    r"\btell me\b", r"\bmore info\b", r"\bmore information\b",
+    r"\bwould love\b", r"\bsounds interesting\b", r"\bopen to\b",
 ]
 
 NOT_INTERESTED_PATTERNS = [
@@ -62,9 +67,9 @@ def classify_reply(text: str, sender: str = "") -> dict:
 
     Returns:
         {
-            "intent": "interested" | "not_interested" | "question" | "out_of_office" | "bounce",
+            "intent": "interested" | "not_interested" | "question" | "out_of_office" | "bounce" | "unclear",
             "confidence": float (0-1),
-            "action": str (what to do next)
+            "action": "send_conversion" | "stop_followups" | "mark_bounced" | "wait" | "ask_telegram"
         }
     """
     text_lower = text.lower().strip()
@@ -103,12 +108,12 @@ def classify_reply(text: str, sender: str = "") -> dict:
     best_score = scores[best]
 
     if best_score == 0:
-        # No clear patterns — default to interested (they replied, that's good)
+        # No clear patterns — intent unknown, send to Telegram for manual decision
         return {
-            "intent": "interested",
-            "confidence": 0.40,
-            "action": "notify_reply",
-            "reason": "Reply received but intent unclear — treat as interested"
+            "intent": "unclear",
+            "confidence": 0.30,
+            "action": "ask_telegram",
+            "reason": "Reply received but intent unclear — forwarding to Telegram for review"
         }
 
     # Normalize confidence
@@ -116,9 +121,9 @@ def classify_reply(text: str, sender: str = "") -> dict:
     confidence = round(best_score / total, 2)
 
     actions = {
-        "interested": "notify_hot_lead",
+        "interested": "send_conversion",
         "not_interested": "stop_followups",
-        "question": "notify_reply",
+        "question": "send_conversion",
     }
 
     # Price/cost questions are strong interest signals
@@ -127,9 +132,9 @@ def classify_reply(text: str, sender: str = "") -> dict:
         confidence = 0.85
 
     reasons = {
-        "interested": "Positive signals detected -- hot lead",
-        "not_interested": "Decline or unsubscribe request",
-        "question": "Asking questions -- engaged but needs more info",
+        "interested": "Positive signals detected — sending conversion email",
+        "not_interested": "Decline or unsubscribe request — stopping outreach",
+        "question": "Asking questions — engaged lead, sending conversion email",
     }
 
     return {

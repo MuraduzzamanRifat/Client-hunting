@@ -84,7 +84,6 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = T
     from src.email_finder import find_email_for_lead
     from src.sheets_manager import SheetsManager
     from src.lead_scoring import score_all_leads
-    from src.email_sender import open_smtp_connection, send_single_lead
     from src.metrics import log_event, log_run
 
     pipeline_status["running"] = True
@@ -109,13 +108,7 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = T
             return
         sheets.open_or_create_sheet()
 
-        # ── Step 3: Connect SMTP once for the whole batch ────────
-        smtp = open_smtp_connection()
-        if not smtp:
-            _log("WARNING: SMTP connection failed — leads will be saved but emails skipped")
-        from_addr = os.getenv("EMAIL_FROM") or os.getenv("EMAIL_USER", "")
-
-        # ── Step 4: Process each lead inline (1:1) ───────────────
+        # ── Step 3: Process each lead inline (1:1) ───────────────
         for i, lead in enumerate(leads, 1):
             name = lead.get("Name", "Unknown")
             website = lead.get("Website", "").strip()
@@ -206,13 +199,6 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = T
             update_sheet_scores(sheets)
         except Exception:
             pass
-
-        # Close SMTP
-        if smtp:
-            try:
-                smtp.quit()
-            except Exception:
-                pass
 
         log_run(keyword, location, stats["leads_scraped"], stats["emails_found"],
                 "success", leads_uploaded=stats["leads_uploaded"])
