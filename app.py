@@ -150,28 +150,29 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = T
                 sheets.upload_to_sheets(sheets.clean_data([lead]))
                 stats["leads_uploaded"] += 1
 
-                # Wait then send
-                if smtp and from_addr:
-                    import time
-                    time.sleep(config.SEND_DELAY_AFTER_COLLECT)
-                    success = send_single_lead(lead, smtp, from_addr)
-                    if success:
-                        stats["emails_sent"] += 1
-                        _log(f"  Sent ({'SEO' if website else 'web creation'} angle)")
-                        # Update sheet row status
-                        all_leads = sheets.read_leads()
-                        for idx, row in enumerate(all_leads):
-                            if row.get("Email", "").lower() == email.lower():
-                                sheets.update_row(idx + 2, {
-                                    "Status": "Email Sent",
-                                    "Contacted": "Yes",
-                                    "Outreach Type": "Email",
-                                })
-                                break
-                    else:
-                        _log(f"  Send failed for {email}")
-                else:
-                    _log(f"  Saved to sheet (SMTP unavailable)")
+                # Find sheet row index
+                all_leads = sheets.read_leads()
+                sheet_row = 0
+                for idx, r in enumerate(all_leads):
+                    if r.get("Email", "").lower() == email.lower():
+                        sheet_row = idx + 2
+                        break
+
+                # Queue for Telegram approval — do NOT send yet
+                from src.telegram_bot import queue_email
+                from src.ai_personalizer import generate_personalized_email
+                content = generate_personalized_email(lead)
+                queue_email(
+                    recipient=email,
+                    subject=content["subject"],
+                    body=content["body"],
+                    lead_data=lead,
+                    service=content.get("service", ""),
+                    angle=content.get("angle", ""),
+                    sheet_row=sheet_row,
+                )
+                stats["emails_sent"] += 1
+                _log(f"  Queued for Telegram approval: {email}")
 
             elif phone:
                 # No email but has phone → Call Queue

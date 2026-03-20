@@ -23,7 +23,8 @@ from src.scraper import fetch_leads, save_to_csv
 from src.email_finder import find_email_for_lead
 from src.sheets_manager import SheetsManager
 from src.lead_scoring import update_sheet_scores, score_all_leads
-from src.email_sender import open_smtp_connection, send_single_lead
+from src.telegram_bot import queue_email
+from src.ai_personalizer import generate_personalized_email
 from src.metrics import log_event, log_run
 import config
 
@@ -70,18 +71,15 @@ def run_pipeline(keyword: str, location: str, num_results: int,
         return stats
     save_to_csv(leads, keyword, location)
 
-    # ── Step 2: SMTP connection ───────────────────────────────────
-    smtp = None
-    from_addr = config.EMAIL_FROM or config.EMAIL_USER
+    # ── Step 2: Telegram bot check ───────────────────────────────
     if not skip_email:
         print("\n" + "-" * 40)
-        print("  STEP 2  Connecting SMTP")
+        print("  STEP 2  Approval mode: Telegram")
         print("-" * 40)
-        smtp = open_smtp_connection()
-        if smtp:
-            print(f"  Connected: {config.SMTP_SERVER}:{config.SMTP_PORT}")
+        if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
+            print(f"  Emails will be sent to Telegram for your approval before sending.")
         else:
-            print("  [!] SMTP failed — leads will be saved but emails skipped")
+            print("  [!] Telegram not configured — emails will be queued but not notified")
 
     # ── Step 3: Process each lead inline (1:1) ────────────────────
     print("\n" + "-" * 40)
@@ -127,32 +125,31 @@ def run_pipeline(keyword: str, location: str, num_results: int,
             sheets.upload_to_sheets(sheets.clean_data([lead]))
             stats["leads_uploaded"] += 1
 
-            # Send email
-            if smtp and not skip_email:
-                print(f"    Angle   : {angle}")
-                print(f"    Waiting : {config.SEND_DELAY_AFTER_COLLECT}s before send...")
-                time.sleep(config.SEND_DELAY_AFTER_COLLECT)
-
-                success = send_single_lead(lead, smtp, from_addr)
-                if success:
-                    stats["emails_sent"] += 1
-                    print(f"    Status  : [OK] Sent")
-                    # Update row in sheet
-                    all_leads = sheets.read_leads()
-                    for idx, row in enumerate(all_leads):
-                        if row.get("Email", "").lower() == email.lower():
-                            sheets.update_row(idx + 2, {
-                                "Status": "Email Sent",
-                                "Contacted": "Yes",
-                                "Outreach Type": "Email",
-                            })
-                            break
-                else:
-                    print(f"    Status  : [FAIL] Send failed")
-            elif skip_email:
+            if skip_email:
                 print(f"    Status  : Saved (--skip-email)")
             else:
-                print(f"    Status  : Saved (SMTP unavailable)")
+                # Find this lead's row index in the sheet
+                all_leads = sheets.read_leads()
+                sheet_row = 0
+                for idx, r in enumerate(all_leads):
+                    if r.get("Email", "").lower() == email.lower():
+                        sheet_row = idx + 2
+                        break
+
+                # Queue for Telegram approval — email is NOT sent yet
+                content = generate_personalized_email(lead)
+                queue_email(
+                    recipient=email,
+                    subject=content["subject"],
+                    body=content["body"],
+                    lead_data=lead,
+                    service=content.get("service", ""),
+                    angle=content.get("angle", ""),
+                    sheet_row=sheet_row,
+                )
+                stats["emails_sent"] += 1
+                print(f"    Angle   : {angle}")
+                print(f"    Status  : Queued — approve on Telegram to send")
 
         elif phone:
             lead["Email"] = ""

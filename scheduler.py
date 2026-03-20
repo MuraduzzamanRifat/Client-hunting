@@ -130,13 +130,8 @@ def run_scheduled_pipeline():
     total_emails = 0
     run_results = []  # [(keyword, location, leads, emails, status)]
 
-    # Open SMTP once for the entire batch
-    from src.email_sender import open_smtp_connection, send_single_lead
-    import os as _os
-    smtp = open_smtp_connection()
-    from_addr = _os.getenv("EMAIL_FROM") or _os.getenv("EMAIL_USER", "")
-    if not smtp:
-        print("  [SCHEDULER] WARNING: SMTP unavailable — leads saved but emails skipped")
+    from src.telegram_bot import queue_email
+    from src.ai_personalizer import generate_personalized_email
 
     for i, target in enumerate(targets, 1):
         keyword = target["keyword"]
@@ -185,20 +180,26 @@ def run_scheduled_pipeline():
                     sheets.upload_to_sheets(sheets.clean_data([lead]))
                     uploaded += 1
 
-                    if smtp and from_addr:
-                        _time.sleep(config.SEND_DELAY_AFTER_COLLECT)
-                        success = send_single_lead(lead, smtp, from_addr)
-                        if success:
-                            all_leads = sheets.read_leads()
-                            for idx, row in enumerate(all_leads):
-                                if row.get("Email", "").lower() == email.lower():
-                                    sheets.update_row(idx + 2, {
-                                        "Status": "Email Sent",
-                                        "Contacted": "Yes",
-                                        "Outreach Type": "Email",
-                                    })
-                                    break
-                            print(f"  Sent to {email}")
+                    # Find sheet row index
+                    all_rows = sheets.read_leads()
+                    sheet_row = 0
+                    for idx, r in enumerate(all_rows):
+                        if r.get("Email", "").lower() == email.lower():
+                            sheet_row = idx + 2
+                            break
+
+                    # Queue for Telegram approval
+                    content = generate_personalized_email(lead)
+                    queue_email(
+                        recipient=email,
+                        subject=content["subject"],
+                        body=content["body"],
+                        lead_data=lead,
+                        service=content.get("service", ""),
+                        angle=content.get("angle", ""),
+                        sheet_row=sheet_row,
+                    )
+                    print(f"  Queued for approval: {email}")
 
                 elif phone:
                     lead["Email"] = ""
@@ -236,12 +237,6 @@ def run_scheduled_pipeline():
             run_results.append((keyword, location, 0, 0, f"error: {err_msg[:60]}"))
             continue
 
-    # Close SMTP
-    if smtp:
-        try:
-            smtp.quit()
-        except Exception:
-            pass
 
     duration = int((datetime.now() - run_start).total_seconds())
 
