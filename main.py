@@ -157,10 +157,23 @@ def main():
     parser = argparse.ArgumentParser(description="Google Maps Lead Generation Pipeline")
     parser.add_argument("--skip-email", action="store_true", help="Run pipeline without sending emails")
     parser.add_argument("--score-only", action="store_true", help="Only re-score existing leads in sheet")
+    parser.add_argument("--quality", action="store_true", help="Run data quality audit on existing sheet")
     parser.add_argument("--keyword", type=str, help="Search keyword (e.g., 'cafes')")
     parser.add_argument("--location", type=str, help="Location (e.g., 'Key West, Florida')")
     parser.add_argument("--count", type=int, help="Number of leads to fetch")
     args = parser.parse_args()
+
+    # Quality-only mode
+    if args.quality:
+        from src.data_quality import run_quality_check, format_audit_report
+        sheets = SheetsManager()
+        if not sheets.authenticate():
+            print("[ERROR] Google Sheets auth failed.")
+            sys.exit(1)
+        sheets.open_or_create_sheet()
+        results = run_quality_check(sheets, verbose=True)
+        print(format_audit_report(results))
+        sys.exit(0)
 
     # Interactive input if not provided via CLI args
     if args.score_only:

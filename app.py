@@ -937,6 +937,63 @@ def api_monitor_log():
     return jsonify(get_event_log(limit=50, event_type=event_type))
 
 
+@app.route("/api/quality/run", methods=["POST"])
+def api_quality_run():
+    """Run data quality audit on the CRM sheet."""
+    from src.sheets_manager import SheetsManager
+    from src.data_quality import run_quality_check, format_audit_report
+
+    try:
+        sheets = SheetsManager()
+        if not sheets.authenticate():
+            return jsonify({"error": "Google Sheets auth failed"}), 500
+        sheets.open_or_create_sheet()
+        results = run_quality_check(sheets, verbose=False)
+
+        counts = {"Valid": 0, "Needs Review": 0, "Invalid": 0}
+        for r in results:
+            counts[r["final_status"]] += 1
+
+        return jsonify({
+            "total": len(results),
+            "valid": counts["Valid"],
+            "needs_review": counts["Needs Review"],
+            "invalid": counts["Invalid"],
+            "auto_fixed": sum(1 for r in results if r["fixes"]),
+            "rows": [
+                {
+                    "row_id": r["row_id"],
+                    "final_status": r["final_status"],
+                    "validation_status": r["validation_status"],
+                    "issues": r["issues"],
+                    "actions": r["actions"],
+                    "fixes_applied": list(r["fixes"].keys()),
+                }
+                for r in results
+            ],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/quality/report")
+def api_quality_report():
+    """Get the last quality run results (read-only, no sheet write)."""
+    from src.sheets_manager import SheetsManager
+    from src.data_quality import run_quality_check, format_audit_report
+
+    try:
+        sheets = SheetsManager()
+        if not sheets.authenticate():
+            return jsonify({"error": "Google Sheets auth failed"}), 500
+        sheets.open_or_create_sheet()
+        results = run_quality_check(sheets, verbose=False)
+        report_text = format_audit_report(results)
+        return jsonify({"report": report_text, "results": results})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Entry point ──────────────────────────────────────────────────────
 def start_app():
     """Start Flask app with optional scheduler and Telegram bot."""
