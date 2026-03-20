@@ -342,7 +342,7 @@ def _check_followup_limits():
     try:
         conn = _get_approvals_db()
         violations = conn.execute(
-            "SELECT email, emails_sent FROM recipient_tracker WHERE emails_sent > 3 AND status = 'active'"
+            "SELECT email, emails_sent FROM recipient_tracker WHERE emails_sent > 2 AND status = 'active'"
         ).fetchall()
         conn.close()
 
@@ -358,7 +358,7 @@ def _check_followup_limits():
 
         if violations:
             _notify("warning", f"{len(violations)} recipients exceeded follow-up limit",
-                    f"Max allowed: 3", "Auto-stopped",
+                    f"Max allowed: 2 (initial + conversion only)", "Auto-stopped",
                     f"Stopped: {', '.join(v['email'] for v in violations[:3])}")
     except Exception:
         pass
