@@ -1106,6 +1106,41 @@ def api_quality_report():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/targets/generate", methods=["POST"])
+def api_targets_generate():
+    """
+    Ask Claude to generate new keyword+location targets and write them to the Targets sheet.
+
+    Optional JSON body:
+      { "count": 7 }   — number of targets to generate (default 7)
+
+    Returns:
+      { "targets": [...], "report": "<telegram text>" }
+    """
+    import config as _cfg
+    if not _cfg.ANTHROPIC_API_KEY:
+        return jsonify({"error": "ANTHROPIC_API_KEY not set. Add it to Koyeb environment variables."}), 400
+
+    try:
+        from src.sheets_manager import SheetsManager
+        from src.target_strategist import generate_targets, format_targets_report
+
+        data = request.get_json(silent=True) or {}
+        n = int(data.get("count", 7))
+
+        sheets = SheetsManager()
+        if not sheets.authenticate():
+            return jsonify({"error": "Google Sheets auth failed"}), 500
+        sheets.open_or_create_sheet()
+
+        new_targets = generate_targets(sheets, n=n)
+        report = format_targets_report(new_targets)
+
+        return jsonify({"targets": new_targets, "report": report, "count": len(new_targets)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Entry point ──────────────────────────────────────────────────────
 def start_app():
     """Start Flask app with optional scheduler and Telegram bot."""

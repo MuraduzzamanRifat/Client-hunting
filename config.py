@@ -9,8 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── API Keys & Credentials ──────────────────────────────────────────
-SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
-GOOGLE_CREDS_FILE = os.getenv("GOOGLE_CREDS_FILE", "credentials.json")
+SERPER_API_KEY      = os.getenv("SERPER_API_KEY", "")
+GOOGLE_CREDS_FILE   = os.getenv("GOOGLE_CREDS_FILE", "credentials.json")
+ANTHROPIC_API_KEY   = os.getenv("ANTHROPIC_API_KEY", "")
 
 # ── Email / SMTP Credentials ────────────────────────────────────────
 # Works with any provider: Gmail, Outlook, Yahoo, Zoho, custom webmail, etc.

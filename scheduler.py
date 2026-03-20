@@ -111,6 +111,20 @@ def run_scheduled_pipeline():
     # Ensure Targets tab exists
     _setup_targets_tab(sheets)
 
+    # ── AI Target Generation ──────────────────────────────────────────
+    # If ANTHROPIC_API_KEY is set, auto-generate fresh targets before each run.
+    if config.ANTHROPIC_API_KEY:
+        try:
+            from src.target_strategist import generate_targets, format_targets_report
+            print("  [TARGET STRATEGIST] Generating new targets via AI...")
+            new_targets = generate_targets(sheets)
+            if new_targets:
+                _tg_notify(format_targets_report(new_targets))
+        except Exception as e:
+            print(f"  [TARGET STRATEGIST] Skipped (error): {e}")
+    else:
+        print("  [TARGET STRATEGIST] Skipped — set ANTHROPIC_API_KEY to enable auto-generation.")
+
     # Read targets
     targets = _read_targets(sheets)
     if not targets:
