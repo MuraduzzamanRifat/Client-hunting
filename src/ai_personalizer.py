@@ -148,17 +148,17 @@ def _random_cta(angle: str) -> str:
     """Generate a soft call-to-action matched to the service."""
     ctas = {
         "seo_grow": [
-            "Want me to do a quick free audit of your current SEO? No strings attached.",
+            "Want me to do a quick audit of your current SEO? No strings attached.",
             "Would you be open to a quick chat about where your site could rank better?",
-            "I'd be happy to send you a free report showing where you're losing traffic. Interested?",
+            "I can put together a short breakdown showing where you're losing traffic. Interested?",
             "If you're curious, I can show you exactly what keywords you should be ranking for. Just reply.",
-            "Want me to take a look at your site and share a few quick wins? Totally free.",
+            "Want me to take a look at your site and share a few quick wins?",
         ],
         "seo_fix": [
             "I'd love to send you a quick breakdown of what could be improved. Interested?",
-            "Want me to take a look and share some ideas? No cost, no pressure.",
+            "Want me to take a look and share some ideas? No pressure.",
             "Would it be helpful if I sent over a few specific suggestions for your site?",
-            "If you're open to it, I can do a free quick review and show you what I'd change first.",
+            "If you're open to it, I can do a quick review and show you what I'd change first.",
             "Happy to share some quick wins that could make a difference. Just reply and I'll send them over.",
         ],
         "website": [

@@ -184,13 +184,6 @@ def run_pipeline(keyword: str, location: str, num_results: int,
     except Exception as e:
         print(f"  [!] Scoring error: {e}")
 
-    # Close SMTP
-    if smtp:
-        try:
-            smtp.quit()
-        except Exception:
-            pass
-
     log_run(keyword, location, stats["leads_scraped"], stats["emails_found"],
             "success", leads_uploaded=stats["leads_uploaded"])
     _print_summary(stats, start_time)

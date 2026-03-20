@@ -53,6 +53,12 @@ def extract_emails(html: str) -> list[str]:
     if not html:
         return []
 
+    # Decode URL encoding before extraction (%20 spaces, etc.)
+    try:
+        from urllib.parse import unquote
+        html = unquote(html)
+    except Exception:
+        pass
     raw_emails = EMAIL_RE.findall(html.lower())
     valid = []
     seen = set()
