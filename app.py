@@ -139,7 +139,14 @@ def _run_pipeline(keyword: str, location: str, count: int, send_emails: bool = T
                 lead.update(scored[0])
                 lead["Status"] = "New"
 
-                # Upload to sheet first
+                # Skip if already contacted in sheet
+                existing = sheets.read_leads()
+                if any(r.get("Email", "").lower() == email.lower()
+                       and str(r.get("Contacted", "")).lower() == "yes"
+                       for r in existing):
+                    _log(f"  Already contacted {email} - skipping")
+                    continue
+
                 sheets.upload_to_sheets(sheets.clean_data([lead]))
                 stats["leads_uploaded"] += 1
 

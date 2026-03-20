@@ -20,118 +20,182 @@ import time
 from datetime import datetime
 
 from src.scraper import fetch_leads, save_to_csv
-from src.email_finder import enrich_leads, save_enriched_csv
+from src.email_finder import find_email_for_lead
 from src.sheets_manager import SheetsManager
-from src.lead_scoring import update_sheet_scores
-from src.email_sender import run_outreach
+from src.lead_scoring import update_sheet_scores, score_all_leads
+from src.email_sender import open_smtp_connection, send_single_lead
+from src.metrics import log_event, log_run
+import config
 
 
 def run_pipeline(keyword: str, location: str, num_results: int,
                  skip_email: bool = False, score_only: bool = False):
-    """Execute the full lead generation pipeline."""
-
+    """
+    1:1 autonomous pipeline.
+    Each lead is processed individually: email found -> send immediately.
+    """
     start_time = time.time()
-    stats = {
-        "leads_scraped": 0,
-        "emails_found": 0,
-        "leads_uploaded": 0,
-        "emails_sent": 0,
-    }
+    stats = {"leads_scraped": 0, "emails_found": 0, "leads_uploaded": 0, "emails_sent": 0}
 
     print("\n" + "=" * 60)
-    print("  GOOGLE MAPS LEAD GENERATION PIPELINE")
-    print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("  GOOGLE MAPS LEAD GENERATION — 1:1 AUTONOMOUS")
+    print(f"  Started : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Keyword : {keyword}")
+    print(f"  Location: {location}")
+    print(f"  Count   : {num_results}")
     print("=" * 60)
 
-    # ── Initialize Google Sheets ─────────────────────────────────
+    # ── Sheets ────────────────────────────────────────────────────
     sheets = SheetsManager()
     if not sheets.authenticate():
-        print("\n[ERROR] Google Sheets auth failed. Cannot continue.")
+        print("\n[ERROR] Google Sheets auth failed.")
         return stats
-
     sheets.open_or_create_sheet()
 
-    # ── Score-only mode ──────────────────────────────────────────
     if score_only:
-        print("\n[MODE] Score-only — re-scoring existing leads")
+        print("\n[MODE] Score-only — re-scoring existing sheet")
         update_sheet_scores(sheets)
         _print_summary(stats, start_time)
         return stats
 
-    # ── Step 1: Scrape Leads ─────────────────────────────────────
+    # ── Step 1: Scrape ────────────────────────────────────────────
     print("\n" + "-" * 40)
-    print("  STEP 1: Scraping Google Maps")
+    print("  STEP 1  Scraping Google Maps")
     print("-" * 40)
-
-    csv_path = ""
-    try:
-        leads = fetch_leads(keyword, location, num_results)
-        stats["leads_scraped"] = len(leads)
-        if leads:
-            csv_path = save_to_csv(leads, keyword, location)
-    except Exception as e:
-        print(f"\n[ERROR] Scraping failed: {e}")
-        print("  Continuing to next step...")
-
-    if not csv_path:
-        print("\n[!] No leads scraped. Pipeline cannot continue.")
+    leads = fetch_leads(keyword, location, num_results)
+    stats["leads_scraped"] = len(leads)
+    if not leads:
+        print("[!] No leads found. Stopping.")
         _print_summary(stats, start_time)
         return stats
+    save_to_csv(leads, keyword, location)
 
-    # ── Step 2: Enrich with Emails ───────────────────────────────
-    print("\n" + "-" * 40)
-    print("  STEP 2: Email Enrichment")
-    print("-" * 40)
-
-    enriched_path = ""
-    try:
-        enriched = enrich_leads(csv_path)
-        stats["emails_found"] = sum(1 for l in enriched if l.get("Email"))
-        if enriched:
-            enriched_path = save_enriched_csv(enriched)
-    except Exception as e:
-        print(f"\n[ERROR] Enrichment failed: {e}")
-        print("  Continuing with un-enriched data...")
-        enriched_path = csv_path  # Fall back to raw CSV
-
-    # ── Step 3: Upload to Google Sheets ──────────────────────────
-    print("\n" + "-" * 40)
-    print("  STEP 3: Google Sheets Upload")
-    print("-" * 40)
-
-    try:
-        raw = sheets.load_csv(enriched_path or csv_path)
-        clean = sheets.clean_data(raw)
-        sheets.upload_to_sheets(clean)
-        stats["leads_uploaded"] = len(clean)
-    except Exception as e:
-        print(f"\n[ERROR] Sheet upload failed: {e}")
-        print("  Continuing to next step...")
-
-    # ── Step 4: Score & Prioritize ───────────────────────────────
-    print("\n" + "-" * 40)
-    print("  STEP 4: Lead Scoring")
-    print("-" * 40)
-
-    try:
-        update_sheet_scores(sheets)
-    except Exception as e:
-        print(f"\n[ERROR] Scoring failed: {e}")
-
-    # ── Step 5: Email Outreach ───────────────────────────────────
-    if skip_email:
-        print("\n  [SKIPPED] Email outreach (--skip-email flag)")
-    else:
+    # ── Step 2: SMTP connection ───────────────────────────────────
+    smtp = None
+    from_addr = config.EMAIL_FROM or config.EMAIL_USER
+    if not skip_email:
         print("\n" + "-" * 40)
-        print("  STEP 5: Email Outreach")
+        print("  STEP 2  Connecting SMTP")
         print("-" * 40)
+        smtp = open_smtp_connection()
+        if smtp:
+            print(f"  Connected: {config.SMTP_SERVER}:{config.SMTP_PORT}")
+        else:
+            print("  [!] SMTP failed — leads will be saved but emails skipped")
 
+    # ── Step 3: Process each lead inline (1:1) ────────────────────
+    print("\n" + "-" * 40)
+    print("  STEP 3  Processing leads (collect -> send)")
+    print("-" * 40)
+
+    for i, lead in enumerate(leads, 1):
+        name = lead.get("Name", "Unknown")
+        website = lead.get("Website", "").strip()
+        phone = lead.get("Phone", "").strip()
+        facebook = lead.get("Facebook", "").strip()
+        angle = "SEO" if website else "web creation"
+
+        print(f"\n  [{i}/{len(leads)}] {name}")
+        print(f"    Website : {website or '—'}  |  Phone: {phone or '—'}")
+
+        # Find email
+        email = find_email_for_lead(lead) if website else ""
+
+        if email:
+            lead["Email"] = email
+            lead["Email Status"] = "Email Found"
+            stats["emails_found"] += 1
+            log_event("collected", recipient=email, details=name)
+            print(f"    Email   : {email}  OK")
+
+            # Score the lead
+            scored = score_all_leads([lead])
+            lead.update(scored[0])
+            lead["Status"] = "New"
+
+            # Upload to sheet (skip if duplicate)
+            existing = sheets.read_leads()
+            already_contacted = any(
+                r.get("Email", "").lower() == email.lower()
+                and str(r.get("Contacted", "")).lower() == "yes"
+                for r in existing
+            )
+            if already_contacted:
+                print(f"    Status  : Already contacted - skip")
+                continue
+
+            sheets.upload_to_sheets(sheets.clean_data([lead]))
+            stats["leads_uploaded"] += 1
+
+            # Send email
+            if smtp and not skip_email:
+                print(f"    Angle   : {angle}")
+                print(f"    Waiting : {config.SEND_DELAY_AFTER_COLLECT}s before send...")
+                time.sleep(config.SEND_DELAY_AFTER_COLLECT)
+
+                success = send_single_lead(lead, smtp, from_addr)
+                if success:
+                    stats["emails_sent"] += 1
+                    print(f"    Status  : [OK] Sent")
+                    # Update row in sheet
+                    all_leads = sheets.read_leads()
+                    for idx, row in enumerate(all_leads):
+                        if row.get("Email", "").lower() == email.lower():
+                            sheets.update_row(idx + 2, {
+                                "Status": "Email Sent",
+                                "Contacted": "Yes",
+                                "Outreach Type": "Email",
+                            })
+                            break
+                else:
+                    print(f"    Status  : [FAIL] Send failed")
+            elif skip_email:
+                print(f"    Status  : Saved (--skip-email)")
+            else:
+                print(f"    Status  : Saved (SMTP unavailable)")
+
+        elif phone:
+            lead["Email"] = ""
+            lead["Email Status"] = "No Email Found"
+            lead["Status"] = "New"
+            lead["Outreach Type"] = "Call Queue"
+            lead["Contact Method"] = "Phone"
+            sheets.upload_to_sheets(sheets.clean_data([lead]))
+            stats["leads_uploaded"] += 1
+            print(f"    Status  : [PHONE] Call Queue ({phone})")
+
+        elif not website and not facebook:
+            print(f"    Status  : [SKIP]  Skipped (no contact data)")
+            continue
+
+        else:
+            lead["Email"] = ""
+            lead["Email Status"] = "No Email Found"
+            lead["Status"] = "New"
+            lead["Outreach Type"] = "Needs Review"
+            sheets.upload_to_sheets(sheets.clean_data([lead]))
+            stats["leads_uploaded"] += 1
+            print(f"    Status  : [REVIEW] Needs Review (has site, no email found)")
+
+    # ── Step 4: Score sheet ───────────────────────────────────────
+    print("\n" + "-" * 40)
+    print("  STEP 4  Scoring sheet")
+    print("-" * 40)
+    try:
+        update_sheet_scores(sheets)
+        print("  Done.")
+    except Exception as e:
+        print(f"  [!] Scoring error: {e}")
+
+    # Close SMTP
+    if smtp:
         try:
-            result = run_outreach(sheets)
-            stats["emails_sent"] = result.get("sent", 0)
-        except Exception as e:
-            print(f"\n[ERROR] Outreach failed: {e}")
+            smtp.quit()
+        except Exception:
+            pass
 
+    log_run(keyword, location, stats["leads_scraped"], stats["emails_found"],
+            "success", leads_uploaded=stats["leads_uploaded"])
     _print_summary(stats, start_time)
     return stats
 

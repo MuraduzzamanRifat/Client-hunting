@@ -146,7 +146,7 @@ def save_to_csv(leads: list[dict], keyword: str, location: str) -> str:
     filename = f"leads_{safe_kw}_{safe_loc}.csv"
     filepath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), filename)
 
-    fieldnames = ["Name", "Address", "Phone", "Website", "Rating", "Reviews"]
+    fieldnames = ["Name", "Address", "Phone", "Website", "Facebook", "Rating", "Reviews"]
     with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
