@@ -8,6 +8,7 @@ No login required for any of this.
 import re
 import random
 import time
+import hashlib
 import asyncio
 import logging
 import requests
@@ -260,7 +261,7 @@ async def collect_from_websites():
                 break
 
             # Skip queries already searched this session (retry idempotency)
-            query_key = f"query:{query[:60]}"
+            query_key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
             if is_url_visited(query_key):
                 continue
 

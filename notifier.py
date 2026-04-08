@@ -3,7 +3,7 @@
 import logging
 import requests
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DAILY_SEND_LIMIT
 
 log = logging.getLogger("outreach.telegram")
 
@@ -30,7 +30,7 @@ def notify_pipeline_start(stats):
     send_telegram(
         f"🚀 <b>Pipeline Started</b>\n"
         f"📊 DB: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent\n"
-        f"📬 Today sent: {stats['today_sent']}/50"
+        f"📬 Today sent: {stats['today_sent']}/{DAILY_SEND_LIMIT}"
     )
 
 
@@ -46,7 +46,7 @@ def notify_sending_done(sent_count, stats):
         f"📤 <b>Sending Done</b>\n"
         f"✅ Sent: {sent_count} emails\n"
         f"📊 DB: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent\n"
-        f"📬 Today: {stats['today_sent']}/50"
+        f"📬 Today: {stats['today_sent']}/{DAILY_SEND_LIMIT}"
     )
 
 

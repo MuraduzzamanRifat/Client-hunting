@@ -111,7 +111,7 @@ def run_pipeline(collect=True, send=True, sheets_mgr=None):
         log.info(f"Sent: {sent} emails")
 
         # Update sheet statuses after sending
-        if sheets_mgr and sent > 0:
+        if sheets_mgr and sheets_mgr.ws and sent > 0:
             sync_to_sheets(sheets_mgr)
 
         stats = get_stats()

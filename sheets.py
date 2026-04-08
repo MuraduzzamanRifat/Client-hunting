@@ -134,16 +134,26 @@ class SheetsManager:
         return len(new_rows)
 
     def update_status(self, email, status, subject=None, last_sent_at=None):
-        """Update an email's status in the sheet."""
+        """Update an email's status in the sheet using cached row map."""
         if not self.ws:
             return
         try:
-            cell = self.ws.find(email.lower().strip(), in_column=1)
-            if cell:
-                self.ws.update_cell(cell.row, 5, status)  # Status column
+            # Build row map once, cache it
+            if not hasattr(self, '_row_map') or not self._row_map:
+                col = self.ws.col_values(1)
+                self._row_map = {e.lower().strip(): i + 1 for i, e in enumerate(col)}
+
+            row = self._row_map.get(email.lower().strip())
+            if row:
+                self.ws.update_cell(row, 5, status)
                 if subject:
-                    self.ws.update_cell(cell.row, 9, subject)
+                    self.ws.update_cell(row, 9, subject)
                 if last_sent_at:
-                    self.ws.update_cell(cell.row, 8, last_sent_at)
+                    self.ws.update_cell(row, 8, last_sent_at)
         except Exception as e:
+            self._row_map = None  # Invalidate cache on error
             log.warning(f"Failed to update status for {email}: {e}")
+
+    def invalidate_cache(self):
+        """Clear cached row map (call after sync)."""
+        self._row_map = None
