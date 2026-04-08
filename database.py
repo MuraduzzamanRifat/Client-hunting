@@ -205,5 +205,13 @@ def get_stats():
     return stats
 
 
+def get_all_emails_for_sync():
+    """Get all email rows for syncing to Google Sheets."""
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM emails ORDER BY collected_at ASC").fetchall()
+    conn.close()
+    return rows
+
+
 # Initialize on import
 init_db()

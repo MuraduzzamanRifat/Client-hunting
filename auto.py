@@ -1,12 +1,13 @@
-"""Fully automated pipeline — collect + send + follow-up.
+"""Fully automated 24/7 pipeline — collect + send + sync + notify.
 
-Runs unattended. Logs to file. Never crashes. Retries on failure.
+Runs forever. Logs to file. Never crashes. Retries on failure.
+Syncs to Google Sheets. Sends Telegram updates.
 
 Usage:
     python auto.py              # Run once: collect + send
-    python auto.py --loop       # Run every 6 hours forever
+    python auto.py --loop       # Run 24/7 (every 6 hours)
     python auto.py --collect    # Only collect
-    python auto.py --send       # Only send (initial + follow-ups)
+    python auto.py --send       # Only send
 """
 
 import sys
@@ -20,28 +21,31 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import LOG_FILE
-from database import get_stats, init_db
-from collectors.facebook_collector import run_facebook_collector
+from database import get_stats, get_all_emails_for_sync, init_db
 from collectors.website_collector import run_website_collector
 from sender import start_sender
+from sheets import SheetsManager
+from notifier import (
+    send_telegram, notify_pipeline_start, notify_collection_done,
+    notify_sending_done, notify_error, notify_sheets_sync,
+)
 
 LOOP_INTERVAL = 6 * 60 * 60  # 6 hours
 MAX_RETRIES = 2
 
 
 def setup_logging():
-    """Log to both console and file with rotation."""
     logger = logging.getLogger("outreach")
+    if logger.handlers:
+        return logger
     logger.setLevel(logging.INFO)
 
     fmt = logging.Formatter('%(asctime)s [%(name)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
-    # Console
     console = logging.StreamHandler()
     console.setFormatter(fmt)
     logger.addHandler(console)
 
-    # File (10MB max, keep 5 rotations)
     file_handler = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
     file_handler.setFormatter(fmt)
     logger.addHandler(file_handler)
@@ -50,44 +54,66 @@ def setup_logging():
 
 
 def run_with_retry(func, name, retries=MAX_RETRIES):
-    """Run a function with retry on failure."""
     log = logging.getLogger("outreach")
     for attempt in range(retries + 1):
         try:
-            result = func()
-            return result
+            return func()
         except Exception as e:
             log.error(f"{name} failed (attempt {attempt+1}/{retries+1}): {e}")
             if attempt < retries:
-                wait = 30 * (attempt + 1)
-                log.info(f"Retrying {name} in {wait}s...")
-                time.sleep(wait)
-    log.error(f"{name} failed after all retries")
+                time.sleep(30 * (attempt + 1))
+            else:
+                notify_error(name, e)
     return 0
 
 
-def run_pipeline(collect=True, send=True):
-    """Run the full pipeline."""
+def sync_to_sheets(sheets_mgr):
+    """Sync all emails from SQLite to Google Sheets."""
+    log = logging.getLogger("outreach")
+    try:
+        if not sheets_mgr.ws:
+            if not sheets_mgr.connect():
+                return 0
+        rows = get_all_emails_for_sync()
+        synced = sheets_mgr.sync_from_db(rows)
+        if synced > 0:
+            notify_sheets_sync(synced)
+        return synced
+    except Exception as e:
+        log.error(f"Sheets sync failed: {e}")
+        return 0
+
+
+def run_pipeline(collect=True, send=True, sheets_mgr=None):
     log = logging.getLogger("outreach")
     log.info("=" * 50)
     log.info("Pipeline started")
 
     stats = get_stats()
-    log.info(f"DB: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent | {stats['today_sent']} today | {stats['due_followup']} due follow-up")
+    log.info(f"DB: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent | {stats['today_sent']} today | {stats['due_followup']} follow-ups due")
+    notify_pipeline_start(stats)
 
     if collect:
-        log.info("--- Facebook Collection ---")
-        fb = run_with_retry(run_facebook_collector, "Facebook")
-        log.info(f"Facebook: {fb} new emails")
-
-        log.info("--- Website Collection (freelancer sites + agencies) ---")
+        log.info("--- Website Collection ---")
         web = run_with_retry(run_website_collector, "Websites")
         log.info(f"Websites: {web} new emails")
+        notify_collection_done(web)
+
+        # Sync to Sheets after collection
+        if sheets_mgr:
+            sync_to_sheets(sheets_mgr)
 
     if send:
         log.info("--- Sending Emails ---")
         sent = run_with_retry(start_sender, "Sender")
-        log.info(f"Sent: {sent} emails (initial + follow-ups)")
+        log.info(f"Sent: {sent} emails")
+
+        # Update sheet statuses after sending
+        if sheets_mgr and sent > 0:
+            sync_to_sheets(sheets_mgr)
+
+        stats = get_stats()
+        notify_sending_done(sent, stats)
 
     stats = get_stats()
     log.info(f"Final: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent | {stats['today_sent']} today")
@@ -96,8 +122,8 @@ def run_pipeline(collect=True, send=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Email Outreach Auto Pipeline")
-    parser.add_argument('--loop', action='store_true', help='Run every 6 hours forever')
+    parser = argparse.ArgumentParser(description="Email Outreach 24/7 Pipeline")
+    parser.add_argument('--loop', action='store_true', help='Run 24/7 (every 6 hours)')
     parser.add_argument('--collect', action='store_true', help='Only collect emails')
     parser.add_argument('--send', action='store_true', help='Only send emails')
     args = parser.parse_args()
@@ -105,34 +131,39 @@ def main():
     init_db()
     log = setup_logging()
 
+    # Connect Google Sheets
+    sheets_mgr = SheetsManager()
+    if not sheets_mgr.connect():
+        log.warning("Google Sheets not connected — will retry each cycle")
+
     do_collect = args.collect or (not args.collect and not args.send)
     do_send = args.send or (not args.collect and not args.send)
 
     if args.loop:
-        log.info(f"Auto-loop mode: running every {LOOP_INTERVAL // 3600} hours")
-        log.info("Press Ctrl+C to stop\n")
+        log.info(f"24/7 mode: running every {LOOP_INTERVAL // 3600} hours")
+        send_telegram("🟢 <b>Email Outreach Bot Started</b>\nRunning 24/7, every 6 hours.")
 
         while True:
             try:
-                run_pipeline(collect=do_collect, send=do_send)
+                run_pipeline(collect=do_collect, send=do_send, sheets_mgr=sheets_mgr)
             except KeyboardInterrupt:
+                send_telegram("🔴 <b>Bot Stopped</b> (manual)")
                 log.info("Stopped by user")
                 break
             except Exception as e:
                 log.error(f"Pipeline crashed: {e}")
-                log.info("Will retry next cycle...")
+                notify_error("Pipeline", e)
 
-            next_run = datetime.now().timestamp() + LOOP_INTERVAL
-            next_time = datetime.fromtimestamp(next_run).strftime('%H:%M:%S')
-            log.info(f"Next run at {next_time} ({LOOP_INTERVAL // 3600}h from now)\n")
+            next_time = datetime.fromtimestamp(time.time() + LOOP_INTERVAL).strftime('%H:%M')
+            log.info(f"Next run at {next_time}\n")
 
             try:
                 time.sleep(LOOP_INTERVAL)
             except KeyboardInterrupt:
-                log.info("Stopped by user")
+                send_telegram("🔴 <b>Bot Stopped</b> (manual)")
                 break
     else:
-        run_pipeline(collect=do_collect, send=do_send)
+        run_pipeline(collect=do_collect, send=do_send, sheets_mgr=sheets_mgr)
 
 
 if __name__ == "__main__":
