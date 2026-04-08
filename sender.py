@@ -6,14 +6,17 @@ Random delays between emails to look human.
 
 import random
 import smtplib
+import imaplib
 import time
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 from config import (
     SMTP_HOST, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD,
     SENDER_NAME, DAILY_SEND_LIMIT, SEND_DELAY_MIN, SEND_DELAY_MAX,
+    IMAP_HOST, IMAP_PORT, IMAP_EMAIL, IMAP_PASSWORD,
 )
 from database import (
     get_unsent_emails, get_followup_emails,
@@ -32,6 +35,22 @@ def create_email(to_email, subject, body):
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
     return msg
+
+
+def save_to_sent_folder(msg):
+    """Save a copy of sent email to IMAP Sent folder."""
+    try:
+        imap = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        imap.login(IMAP_EMAIL, IMAP_PASSWORD)
+        # Try common Sent folder names
+        for folder in ['INBOX.Sent', 'Sent', 'INBOX/Sent']:
+            status, _ = imap.select(folder)
+            if status == 'OK':
+                imap.append(folder, '\\Seen', None, msg.as_bytes())
+                break
+        imap.logout()
+    except Exception as e:
+        log.warning(f"Could not save to Sent folder: {e}")
 
 
 def connect_smtp():
@@ -76,6 +95,7 @@ def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
 
             msg = create_email(to, subject, body)
             smtp.sendmail(SMTP_EMAIL, to, msg.as_string())
+            save_to_sent_folder(msg)
 
             mark_sent(email_row['id'], subject, 'smtp', email_type)
             batch_sent += 1
