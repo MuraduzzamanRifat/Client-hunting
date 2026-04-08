@@ -187,9 +187,6 @@ def get_tracking_stats():
             stats['reply_rate'] = 0
             stats['bounce_rate'] = 0
 
-        # Click rate comes from Google Analytics (UTM params)
-        stats['click_note'] = "Check Google Analytics for click data (UTM: freelancer_bd)"
-
         return stats
     finally:
         conn.close()

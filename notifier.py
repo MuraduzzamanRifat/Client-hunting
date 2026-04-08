@@ -75,11 +75,11 @@ def notify_tracking_stats(stats):
     total_sent = stats['sent'] + stats['replied'] + stats['bounced']
     send_telegram(
         f"📈 <b>Tracking Report</b>\n"
-        f"📨 Sent: {total_sent}\n"
+        f"📨 Total sent: {total_sent}\n"
         f"💬 Replies: {stats['replied']} ({stats['reply_rate']}%)\n"
         f"🔴 Bounced: {stats['bounced']} ({stats['bounce_rate']}%)\n"
         f"📭 Unsent: {stats['new']}\n"
-        f"🔗 Clicks: Check Google Analytics (campaign: freelancer_bd)"
+        f"⏳ Follow-ups due: {stats.get('due_followup', 0)}"
     )
 
 

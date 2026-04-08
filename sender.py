@@ -30,18 +30,16 @@ log = logging.getLogger("outreach.sender")
 
 
 def create_email(to_email, subject, body):
-    """Create email with clean HTML links (hides UTM params)."""
+    """Create email with clean HTML anchor links."""
     msg = MIMEMultipart('alternative')
     msg['From'] = f'{SENDER_NAME} <{SMTP_EMAIL}>'
     msg['To'] = to_email
     msg['Subject'] = subject
 
-    # Plain text fallback (strip UTM for plain)
-    plain_body = body.replace(EXTENSION_URL, 'https://proworkspace.online/')
-    plain_body = plain_body.replace(PURCHASE_EXTENSION_URL, 'https://proworkspace.online/purchase')
-    msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+    # Plain text
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-    # HTML version — clean anchor links
+    # HTML — clickable links
     html_body = body.replace('\n', '<br>\n')
     html_body = html_body.replace(
         EXTENSION_URL,

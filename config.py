@@ -82,8 +82,8 @@ FOLLOWUP_SUBJECT_LINES = [
 ]
 
 SENDER_NAME = "ProWorkspace"
-EXTENSION_URL = "https://proworkspace.online/?utm_source=email&utm_medium=outreach&utm_campaign=freelancer_bd"
-PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase?utm_source=email&utm_medium=outreach&utm_campaign=freelancer_bd"
+EXTENSION_URL = "https://proworkspace.online/"
+PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
 
 # --- IMAP (for reply/bounce tracking) ---
 IMAP_HOST = "mail.brandivibe.com"
