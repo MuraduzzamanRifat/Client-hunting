@@ -205,16 +205,45 @@ def get_today_send_count():
         conn.close()
 
 
+def update_status(email_id, status):
+    """Update an email's status (general purpose)."""
+    conn = get_db()
+    try:
+        conn.execute("UPDATE emails SET status = ? WHERE id = ?", (status, email_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def get_stats():
     conn = get_db()
     try:
-        stats = {}
-        stats["total"] = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
-        stats["new"] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='new'").fetchone()[0]
-        stats["sent"] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='sent'").fetchone()[0]
-        stats["skipped"] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='skipped'").fetchone()[0]
-        stats["today_sent"] = get_today_send_count()
+        # Single GROUP BY instead of 6 separate queries
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM emails GROUP BY status"
+        ).fetchall()
+        counts = {row['status']: row['cnt'] for row in rows}
 
+        stats = {
+            "total": sum(counts.values()),
+            "new": counts.get('new', 0),
+            "sent": counts.get('sent', 0),
+            "skipped": counts.get('skipped', 0),
+            "replied": counts.get('replied', 0),
+            "bounced": counts.get('bounced', 0),
+            "today_sent": get_today_send_count(),
+        }
+
+        # Reply/bounce rates
+        total_sent = stats['sent'] + stats['replied'] + stats['bounced']
+        if total_sent > 0:
+            stats['reply_rate'] = round(stats['replied'] / total_sent * 100, 1)
+            stats['bounce_rate'] = round(stats['bounced'] / total_sent * 100, 1)
+        else:
+            stats['reply_rate'] = 0.0
+            stats['bounce_rate'] = 0.0
+
+        # Follow-ups due
         cutoff = (datetime.now() - timedelta(days=FOLLOWUP_AFTER_DAYS)).isoformat()
         stats["due_followup"] = conn.execute(
             "SELECT COUNT(*) FROM emails WHERE status='sent' AND followup_count < ? AND last_sent_at < ?",

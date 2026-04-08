@@ -17,6 +17,9 @@ SCOPES = [
 
 HEADERS = ['Email', 'Name', 'Source', 'Source URL', 'Status', 'Followup #', 'Collected At', 'Last Sent At', 'Subject']
 
+# Column indices (1-based for gspread)
+COL = {h: i + 1 for i, h in enumerate(HEADERS)}
+
 
 class SheetsManager:
     def __init__(self):
@@ -145,11 +148,11 @@ class SheetsManager:
 
             row = self._row_map.get(email.lower().strip())
             if row:
-                self.ws.update_cell(row, 5, status)
+                self.ws.update_cell(row, COL['Status'], status)
                 if subject:
-                    self.ws.update_cell(row, 9, subject)
+                    self.ws.update_cell(row, COL['Subject'], subject)
                 if last_sent_at:
-                    self.ws.update_cell(row, 8, last_sent_at)
+                    self.ws.update_cell(row, COL['Last Sent At'], last_sent_at)
         except Exception as e:
             self._row_map = None  # Invalidate cache on error
             log.warning(f"Failed to update status for {email}: {e}")

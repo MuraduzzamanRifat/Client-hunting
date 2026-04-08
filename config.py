@@ -88,5 +88,5 @@ PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
 # --- IMAP (for reply/bounce tracking) ---
 IMAP_HOST = "mail.brandivibe.com"
 IMAP_PORT = 993
-IMAP_EMAIL = "knock@brandivibe.com"
-IMAP_PASSWORD = "Vk+#awH_&]Y3MF]."  # Same as SMTP
+IMAP_EMAIL = SMTP_EMAIL
+IMAP_PASSWORD = SMTP_PASSWORD

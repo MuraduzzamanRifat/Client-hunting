@@ -11,7 +11,7 @@ import logging
 from email.header import decode_header
 
 from config import IMAP_HOST, IMAP_PORT, IMAP_EMAIL, IMAP_PASSWORD
-from database import get_db
+from database import get_db, update_status, get_stats
 
 log = logging.getLogger("outreach.tracker")
 
@@ -115,7 +115,7 @@ def check_inbox():
                     body = get_body(msg)
                     for addr, eid in sent_emails.items():
                         if addr in body.lower():
-                            mark_status(eid, 'bounced')
+                            update_status(eid, 'bounced')
                             stats['bounces'] += 1
                             log.info(f"  BOUNCE: {addr}")
                             break
@@ -123,7 +123,7 @@ def check_inbox():
                 # Check for reply from someone we emailed
                 elif sender in sent_emails:
                     eid = sent_emails[sender]
-                    mark_status(eid, 'replied')
+                    update_status(eid, 'replied')
                     stats['replies'] += 1
                     log.info(f"  REPLY: {sender}")
 
@@ -156,40 +156,9 @@ def get_body(msg):
     return ''
 
 
-def mark_status(email_id, status):
-    """Update email status in DB."""
-    conn = get_db()
-    try:
-        conn.execute("UPDATE emails SET status = ? WHERE id = ?", (status, email_id))
-        conn.commit()
-    finally:
-        conn.close()
-
-
 def get_tracking_stats():
-    """Get comprehensive tracking stats."""
-    conn = get_db()
-    try:
-        stats = {}
-        stats['total'] = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
-        stats['new'] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='new'").fetchone()[0]
-        stats['sent'] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='sent'").fetchone()[0]
-        stats['replied'] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='replied'").fetchone()[0]
-        stats['bounced'] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='bounced'").fetchone()[0]
-        stats['skipped'] = conn.execute("SELECT COUNT(*) FROM emails WHERE status='skipped'").fetchone()[0]
-
-        # Calculate rates
-        total_sent = stats['sent'] + stats['replied'] + stats['bounced']
-        if total_sent > 0:
-            stats['reply_rate'] = round(stats['replied'] / total_sent * 100, 1)
-            stats['bounce_rate'] = round(stats['bounced'] / total_sent * 100, 1)
-        else:
-            stats['reply_rate'] = 0
-            stats['bounce_rate'] = 0
-
-        return stats
-    finally:
-        conn.close()
+    """Get tracking stats — delegates to database.get_stats()."""
+    return get_stats()
 
 
 if __name__ == "__main__":

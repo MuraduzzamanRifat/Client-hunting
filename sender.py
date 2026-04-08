@@ -55,20 +55,29 @@ def create_email(to_email, subject, body):
     return msg
 
 
-def save_to_sent_folder(msg):
-    """Save a copy of sent email to IMAP Sent folder."""
+def connect_imap_sent():
+    """Open IMAP connection to Sent folder. Returns (imap, folder) or (None, None)."""
     try:
         imap = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
         imap.login(IMAP_EMAIL, IMAP_PASSWORD)
-        # Try common Sent folder names
         for folder in ['INBOX.Sent', 'Sent', 'INBOX/Sent']:
             status, _ = imap.select(folder)
             if status == 'OK':
-                imap.append(folder, '\\Seen', None, msg.as_bytes())
-                break
+                return imap, folder
         imap.logout()
     except Exception as e:
-        log.warning(f"Could not save to Sent folder: {e}")
+        log.warning(f"IMAP Sent folder connect failed: {e}")
+    return None, None
+
+
+def save_to_sent_folder(imap, folder, msg):
+    """Save a copy of sent email to IMAP Sent folder (reuses connection)."""
+    if not imap or not folder:
+        return
+    try:
+        imap.append(folder, '\\Seen', None, msg.as_bytes())
+    except Exception as e:
+        log.warning(f"Could not save to Sent: {e}")
 
 
 def connect_smtp():
@@ -89,7 +98,7 @@ def connect_smtp():
 MAX_BOUNCE_RATE = 0.03  # 3% — stop sending if exceeded
 
 
-def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
+def send_batch(smtp, imap, imap_folder, emails, template_fn, email_type, sent_count, total_limit):
     """Send a batch of emails. Returns number sent."""
     batch_sent = 0
     batch_bounced = 0
@@ -129,7 +138,7 @@ def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
 
             msg = create_email(to, subject, body)
             smtp.sendmail(SMTP_EMAIL, to, msg.as_string())
-            save_to_sent_folder(msg)
+            save_to_sent_folder(imap, imap_folder, msg)
 
             mark_sent(email_row['id'], subject, 'smtp', email_type)
             batch_sent += 1
@@ -194,22 +203,30 @@ def start_sender():
 
     log.info(f"SMTP connected: {SMTP_EMAIL} @ {SMTP_HOST}")
 
+    # Open IMAP once for saving to Sent folder
+    imap, imap_folder = connect_imap_sent()
+
     total_sent = 0
 
     # Send new emails first
     if new_emails:
-        sent = send_batch(smtp, new_emails, get_template, 'initial', total_sent, remaining)
+        sent = send_batch(smtp, imap, imap_folder, new_emails, get_template, 'initial', total_sent, remaining)
         total_sent += sent
         log.info(f"Initial: {sent} sent")
 
     # Then follow-ups
     if followup_emails and total_sent < remaining:
-        sent = send_batch(smtp, followup_emails, get_followup_template, 'followup', total_sent, remaining)
+        sent = send_batch(smtp, imap, imap_folder, followup_emails, get_followup_template, 'followup', total_sent, remaining)
         total_sent += sent
         log.info(f"Follow-ups: {sent} sent")
 
     try:
         smtp.quit()
+    except Exception:
+        pass
+    try:
+        if imap:
+            imap.logout()
     except Exception:
         pass
 
