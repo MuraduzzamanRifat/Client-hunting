@@ -69,3 +69,24 @@ def notify_daily_summary(stats):
         f"Today sent: {stats['today_sent']}/50\n"
         f"Follow-ups due: {stats['due_followup']}"
     )
+
+
+def notify_tracking_stats(stats):
+    total_sent = stats['sent'] + stats['replied'] + stats['bounced']
+    send_telegram(
+        f"📈 <b>Tracking Report</b>\n"
+        f"📨 Sent: {total_sent}\n"
+        f"💬 Replies: {stats['replied']} ({stats['reply_rate']}%)\n"
+        f"🔴 Bounced: {stats['bounced']} ({stats['bounce_rate']}%)\n"
+        f"📭 Unsent: {stats['new']}\n"
+        f"🔗 Clicks: Check Google Analytics (campaign: freelancer_bd)"
+    )
+
+
+def notify_inbox_check(inbox_stats):
+    if inbox_stats['replies'] > 0 or inbox_stats['bounces'] > 0:
+        send_telegram(
+            f"📬 <b>Inbox Update</b>\n"
+            f"💬 New replies: {inbox_stats['replies']}\n"
+            f"🔴 Bounces: {inbox_stats['bounces']}"
+        )

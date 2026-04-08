@@ -25,9 +25,11 @@ from database import get_stats, get_all_emails_for_sync, init_db
 from collectors.website_collector import run_website_collector
 from sender import start_sender
 from sheets import SheetsManager
+from tracker import check_inbox, get_tracking_stats
 from notifier import (
     send_telegram, notify_pipeline_start, notify_collection_done,
     notify_sending_done, notify_error, notify_sheets_sync,
+    notify_tracking_stats, notify_inbox_check,
 )
 
 LOOP_INTERVAL = 6 * 60 * 60  # 6 hours
@@ -114,6 +116,21 @@ def run_pipeline(collect=True, send=True, sheets_mgr=None):
 
         stats = get_stats()
         notify_sending_done(sent, stats)
+
+    # --- Check inbox for replies/bounces ---
+    log.info("--- Checking Inbox ---")
+    try:
+        inbox_stats = check_inbox()
+        log.info(f"Replies: {inbox_stats['replies']}, Bounces: {inbox_stats['bounces']}")
+        notify_inbox_check(inbox_stats)
+    except Exception as e:
+        log.warning(f"Inbox check failed: {e}")
+
+    # --- Send tracking report ---
+    tracking = get_tracking_stats()
+    log.info(f"Tracking: {tracking['replied']} replies ({tracking['reply_rate']}%), "
+             f"{tracking['bounced']} bounces ({tracking['bounce_rate']}%)")
+    notify_tracking_stats(tracking)
 
     stats = get_stats()
     log.info(f"Final: {stats['total']} total | {stats['new']} unsent | {stats['sent']} sent | {stats['today_sent']} today")
