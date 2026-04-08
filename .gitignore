@@ -1,0 +1,18 @@
+# Credentials — NEVER push
+config.py
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Browser session
+browser_data/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.env
