@@ -1,7 +1,7 @@
-"""Email templates for ProWorkSpace outreach.
+"""Email templates — short, curiosity-driven, no hard sell.
 
-Initial emails + follow-up emails. Real pricing ($19/$39).
-Random selection per email to avoid pattern detection.
+Rule: 50-100 words max. Personal hook > problem > offer > soft CTA.
+First email = build curiosity. Follow-ups = add value.
 """
 
 import random
@@ -9,7 +9,7 @@ from config import SENDER_NAME, EXTENSION_URL, PURCHASE_EXTENSION_URL, SUBJECT_L
 
 
 def get_template(name=None):
-    """Returns (subject, body) for initial outreach."""
+    """Returns (subject, body) for initial outreach. ~60-80 words."""
     first_name = name.strip().split()[0] if name and name.strip() else ""
     greeting = f"Hey {first_name}," if first_name else "Hey,"
     subject = random.choice(SUBJECT_LINES)
@@ -17,49 +17,11 @@ def get_template(name=None):
     templates = [
         f"""{greeting}
 
-I know the Upwork grind — writing proposals all day and hearing nothing back.
+Noticed you're freelancing on Upwork. Quick question — are you happy with your proposal response rate?
 
-I built ProWorkSpace to fix that. It's a Chrome extension that:
+Most freelancers I talk to waste 80% of their connects on jobs that were never going to reply.
 
-- Analyzes your profile and tells you exactly what to fix
-- Uses AI to write proposals that actually get replies
-- Shows you which jobs are worth your connects
-
-It's just $19 one-time (not a subscription).
-
-Check it out: {EXTENSION_URL}
-
-— {SENDER_NAME}""",
-
-        f"""{greeting}
-
-Quick question — how many Upwork proposals did you send last week with zero response?
-
-Most freelancers waste 80% of their connects on jobs that were never going to reply.
-
-I built ProWorkSpace — a Chrome extension that:
-
-- Scores your profile and shows what clients actually see
-- Writes AI proposals matched to each job
-- Tells you which jobs are worth applying to
-
-$19 one-time. No subscription. No tricks.
-
-Try it: {EXTENSION_URL}
-
-— {SENDER_NAME}""",
-
-        f"""{greeting}
-
-The biggest mistake on Upwork? Applying to everything and hoping something sticks.
-
-ProWorkSpace fixes that. It's a Chrome extension that helps you:
-
-- Fix your profile so clients find YOU
-- Write better proposals in seconds with AI
-- Stop wasting connects on dead-end jobs
-
-Starts at $19 — one payment, use it forever.
+I built something that fixes that. Curious?
 
 {EXTENSION_URL}
 
@@ -67,33 +29,43 @@ Starts at $19 — one payment, use it forever.
 
         f"""{greeting}
 
-If you're freelancing on Upwork, this might save you hours every week.
+What if you could tell which Upwork jobs will actually respond before you apply?
 
-ProWorkSpace is a Chrome extension that:
+That's exactly what I built. It scores jobs, fixes your profile, and writes proposals using AI.
 
-- Reviews your profile and gives specific improvement tips
-- Generates AI-powered proposals tailored to each job
-- Helps you pick jobs where you'll actually get a response
-
-I'm a freelancer too — I built this because I was tired of the same problems.
-
-$19 one-time: {PURCHASE_EXTENSION_URL}
+Might be useful for you: {EXTENSION_URL}
 
 — {SENDER_NAME}""",
 
         f"""{greeting}
 
-Upwork is competitive. Most proposals get ignored.
+The freelancers landing the best Upwork clients aren't writing better proposals — they're picking better jobs to apply to.
 
-ProWorkSpace changes that — it's a Chrome extension that:
+I built a Chrome extension that does exactly that. It also reviews your profile and tells you what to fix.
 
-- Tells you what's wrong with your profile (and how to fix it)
-- Writes proposals using AI that match what clients want
-- Filters jobs so you only apply where you have a real shot
+Worth a look? {EXTENSION_URL}
 
-$19 for Pro, $39 for Agency (unlimited). One-time payment.
+— {SENDER_NAME}""",
 
-{EXTENSION_URL}
+        f"""{greeting}
+
+Upwork is a numbers game — but most freelancers play it wrong.
+
+Instead of sending 50 proposals and hoping, what if you only applied to jobs where you'd actually get a response?
+
+I built a tool for that: {EXTENSION_URL}
+
+Takes 2 minutes to try.
+
+— {SENDER_NAME}""",
+
+        f"""{greeting}
+
+One thing that separates top Upwork freelancers from everyone else — they know which jobs to skip.
+
+I built ProWorkSpace to give every freelancer that same advantage. AI job scoring + proposal writing + profile audit.
+
+Here if you want to check it out: {EXTENSION_URL}
 
 — {SENDER_NAME}""",
     ]
@@ -102,7 +74,7 @@ $19 for Pro, $39 for Agency (unlimited). One-time payment.
 
 
 def get_followup_template(name=None, followup_num=1):
-    """Returns (subject, body) for follow-up emails."""
+    """Returns (subject, body) for follow-ups. Even shorter."""
     first_name = name.strip().split()[0] if name and name.strip() else ""
     greeting = f"Hey {first_name}," if first_name else "Hey,"
     subject = random.choice(FOLLOWUP_SUBJECT_LINES)
@@ -111,26 +83,19 @@ def get_followup_template(name=None, followup_num=1):
         templates = [
             f"""{greeting}
 
-I reached out a few days ago about ProWorkSpace — a Chrome extension that helps Upwork freelancers write better proposals and fix their profiles using AI.
+Sent you a note about ProWorkSpace a few days ago. No worries if it's not for you.
 
-Just wanted to make sure you saw it. Freelancers who use it are getting 3-5x more responses on their proposals.
+Just wanted to mention — freelancers using it are seeing 3-5x better response rates on Upwork.
 
-It's $19 one-time (no subscription): {PURCHASE_EXTENSION_URL}
-
-No pressure — just thought it might help.
+{EXTENSION_URL}
 
 — {SENDER_NAME}""",
 
             f"""{greeting}
 
-Following up on my last email. I know inboxes get busy.
+Following up quickly. I know inboxes get busy.
 
-ProWorkSpace helps you:
-- Stop wasting Upwork connects on the wrong jobs
-- Write proposals that actually get responses
-- Fix your profile so clients come to you
-
-$19 once. That's less than 4 connects on Upwork.
+If you're still spending hours writing Upwork proposals manually, ProWorkSpace might save you real time.
 
 {EXTENSION_URL}
 
@@ -140,13 +105,11 @@ $19 once. That's less than 4 connects on Upwork.
         templates = [
             f"""{greeting}
 
-Last time reaching out about this — ProWorkSpace is helping freelancers on Upwork land more clients with less effort.
+Last note from me on this. ProWorkSpace is helping freelancers win more Upwork jobs with less effort.
 
-AI-powered proposals + profile optimization for just $19.
+If you're ever curious: {EXTENSION_URL}
 
-If you're interested: {PURCHASE_EXTENSION_URL}
-
-Either way, good luck with your freelancing!
+Good luck with everything!
 
 — {SENDER_NAME}""",
         ]

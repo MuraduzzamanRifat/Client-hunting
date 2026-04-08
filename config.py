@@ -38,9 +38,9 @@ SMTP_EMAIL = "knock@brandivibe.com"
 SMTP_PASSWORD = "Vk+#awH_&]Y3MF]."
 
 # --- Sending ---
-DAILY_SEND_LIMIT = 50
-SEND_DELAY_MIN = 60
-SEND_DELAY_MAX = 180
+DAILY_SEND_LIMIT = 25  # Warming phase — increase weekly: 25 > 35 > 50
+SEND_DELAY_MIN = 90    # 1.5 min minimum between emails
+SEND_DELAY_MAX = 240   # 4 min max — more human-like
 
 # --- Follow-up ---
 FOLLOWUP_AFTER_DAYS = 3
@@ -62,30 +62,31 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "outreach.db")
 
 # --- Email Template ---
 SUBJECT_LINES = [
-    "Stop wasting connects — this changes everything",
-    "You're applying wrong on Upwork (fix this now)",
-    "This AI tells you which jobs will reply",
-    "Why you're getting 0 replies on Upwork",
-    "Apply to fewer jobs, get more clients",
-    "The 5-second mistake killing your proposals",
-    "Top freelancers are using this (you're not)",
-    "This tool writes proposals that get replies",
-    "You're one good client away — don't miss it",
-    "Most freelancers ignore this (big mistake)",
-    "Turn 5 proposals into 2 clients",
-    "This changes how you use Upwork forever",
-    "Still writing proposals manually? Read this",
-    "From ignored to hired — fix this today",
-    "Your Upwork strategy is broken (here's why)",
+    "quick question about your Upwork",
+    "noticed something about your profile",
+    "thought of you",
+    "curious about something",
+    "re: Upwork proposals",
+    "idea for you",
+    "saw your work",
+    "this might help",
+    "honest question",
+    "2 minute read",
 ]
 
 FOLLOWUP_SUBJECT_LINES = [
-    "Just following up — did you see this?",
-    "Quick reminder about your Upwork profile",
-    "Still interested? The offer stands",
-    "Don't miss this — freelancers are loving it",
+    "re: my last note",
+    "bumping this",
+    "any thoughts?",
+    "last one from me",
 ]
 
 SENDER_NAME = "ProWorkspace"
-EXTENSION_URL = "https://proworkspace.online/"
-PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
+EXTENSION_URL = "https://proworkspace.online/?utm_source=email&utm_medium=outreach&utm_campaign=freelancer_bd"
+PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase?utm_source=email&utm_medium=outreach&utm_campaign=freelancer_bd"
+
+# --- IMAP (for reply/bounce tracking) ---
+IMAP_HOST = "mail.brandivibe.com"
+IMAP_PORT = 993
+IMAP_EMAIL = "knock@brandivibe.com"
+IMAP_PASSWORD = "Vk+#awH_&]Y3MF]."  # Same as SMTP

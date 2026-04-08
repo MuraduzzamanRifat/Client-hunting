@@ -23,6 +23,7 @@ from database import (
     mark_sent, mark_failed, get_today_send_count, was_sent_today,
 )
 from templates import get_template, get_followup_template
+from validator import validate_email
 
 log = logging.getLogger("outreach.sender")
 
@@ -68,17 +69,33 @@ def connect_smtp():
         return None
 
 
+MAX_BOUNCE_RATE = 0.03  # 3% — stop sending if exceeded
+
+
 def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
     """Send a batch of emails. Returns number sent."""
     batch_sent = 0
+    batch_bounced = 0
 
     for email_row in emails:
         if sent_count + batch_sent >= total_limit:
             break
 
+        # Auto-stop if bounce rate exceeds 3%
+        if batch_sent > 5 and batch_bounced / batch_sent > MAX_BOUNCE_RATE:
+            log.error(f"BOUNCE RATE {batch_bounced}/{batch_sent} exceeds 3% — STOPPING to protect domain")
+            break
+
         # Skip if already sent today (prevent double-send)
         if was_sent_today(email_row['id']):
             log.info(f"  Skipping {email_row['email']} (already sent today)")
+            continue
+
+        # Validate email before sending
+        is_valid, reason = validate_email(email_row['email'])
+        if not is_valid:
+            log.info(f"  Skipping {email_row['email']} (invalid: {reason})")
+            mark_failed(email_row['id'])
             continue
 
         try:
@@ -109,6 +126,7 @@ def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
         except smtplib.SMTPRecipientsRefused:
             log.warning(f"  BOUNCED: {email_row['email']}")
             mark_failed(email_row['id'])
+            batch_bounced += 1
         except smtplib.SMTPException as e:
             log.warning(f"  SMTP error: {e}")
             mark_failed(email_row['id'])
