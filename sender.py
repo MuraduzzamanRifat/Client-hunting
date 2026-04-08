@@ -17,6 +17,7 @@ from config import (
     SMTP_HOST, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD,
     SENDER_NAME, DAILY_SEND_LIMIT, SEND_DELAY_MIN, SEND_DELAY_MAX,
     IMAP_HOST, IMAP_PORT, IMAP_EMAIL, IMAP_PASSWORD,
+    EXTENSION_URL, PURCHASE_EXTENSION_URL,
 )
 from database import (
     get_unsent_emails, get_followup_emails,
@@ -29,12 +30,30 @@ log = logging.getLogger("outreach.sender")
 
 
 def create_email(to_email, subject, body):
-    """Create a natural-looking plain text email."""
+    """Create email with clean HTML links (hides UTM params)."""
     msg = MIMEMultipart('alternative')
     msg['From'] = f'{SENDER_NAME} <{SMTP_EMAIL}>'
     msg['To'] = to_email
     msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    # Plain text fallback (strip UTM for plain)
+    plain_body = body.replace(EXTENSION_URL, 'https://proworkspace.online/')
+    plain_body = plain_body.replace(PURCHASE_EXTENSION_URL, 'https://proworkspace.online/purchase')
+    msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+
+    # HTML version — clean anchor links
+    html_body = body.replace('\n', '<br>\n')
+    html_body = html_body.replace(
+        EXTENSION_URL,
+        f'<a href="{EXTENSION_URL}">proworkspace.online</a>'
+    )
+    html_body = html_body.replace(
+        PURCHASE_EXTENSION_URL,
+        f'<a href="{PURCHASE_EXTENSION_URL}">proworkspace.online/purchase</a>'
+    )
+    html_body = f'<div style="font-family:sans-serif;font-size:14px;color:#222;">{html_body}</div>'
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
     return msg
 
 
