@@ -100,14 +100,14 @@ async def visit_profile(page, profile_path, total_collected, visited):
             header = await page.query_selector('header')
             if header:
                 bio_text = await header.inner_text()
-        except:
+        except Exception:
             pass
 
         # Page text (limited)
         try:
             page_text = await page.inner_text('body')
             bio_text += " " + page_text[:2000]
-        except:
+        except Exception:
             pass
 
         # Check mailto links (business profiles)
@@ -117,7 +117,7 @@ async def visit_profile(page, profile_path, total_collected, visited):
                 mailto = await email_btn.first.get_attribute('href')
                 if mailto:
                     bio_text += " " + mailto.replace('mailto:', '')
-        except:
+        except Exception:
             pass
 
         # Get name
@@ -126,7 +126,7 @@ async def visit_profile(page, profile_path, total_collected, visited):
             name_el = await page.query_selector('header h2, header span')
             if name_el:
                 name = (await name_el.inner_text()).strip()
-        except:
+        except Exception:
             pass
 
         emails = extract_emails(bio_text)
@@ -168,7 +168,7 @@ async def get_profile_links(page):
                 return [...profiles];
             }
         """)
-    except:
+    except Exception:
         return []
 
 

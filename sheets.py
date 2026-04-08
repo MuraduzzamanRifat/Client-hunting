@@ -69,13 +69,14 @@ class SheetsManager:
             return set()
 
     def add_row(self, email, name=None, source=None, source_url=None, status='new',
-                followup_count=0, collected_at=None, last_sent_at=None, subject=None):
+                followup_count=0, collected_at=None, last_sent_at=None, subject=None,
+                _cache=None):
         """Add a single email row. Returns True if added (not duplicate)."""
         if not self.ws:
             return False
 
-        # Dedup check
-        existing = self.get_all_emails()
+        # Dedup check — use cache if provided, else fetch
+        existing = _cache if _cache is not None else self.get_all_emails()
         if email.lower().strip() in existing:
             return False
 

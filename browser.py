@@ -100,7 +100,7 @@ async def auto_login_instagram(page):
             if await not_now.count() > 0:
                 await not_now.first.click()
                 await asyncio.sleep(1)
-        except:
+        except Exception:
             pass
         return True
 
@@ -146,7 +146,7 @@ async def auto_login_instagram(page):
             if await save_btn.count() > 0:
                 await save_btn.first.click()
                 await asyncio.sleep(1)
-        except:
+        except Exception:
             pass
 
         # Dismiss notifications popup
@@ -155,7 +155,7 @@ async def auto_login_instagram(page):
             if await not_now.count() > 0:
                 await not_now.first.click()
                 await asyncio.sleep(1)
-        except:
+        except Exception:
             pass
 
         # Verify login

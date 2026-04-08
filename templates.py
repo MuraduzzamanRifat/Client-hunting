@@ -10,7 +10,7 @@ from config import SENDER_NAME, EXTENSION_URL, PURCHASE_EXTENSION_URL, SUBJECT_L
 
 def get_template(name=None):
     """Returns (subject, body) for initial outreach."""
-    first_name = name.split()[0] if name else ""
+    first_name = name.strip().split()[0] if name and name.strip() else ""
     greeting = f"Hey {first_name}," if first_name else "Hey,"
     subject = random.choice(SUBJECT_LINES)
 
@@ -103,7 +103,7 @@ $19 for Pro, $39 for Agency (unlimited). One-time payment.
 
 def get_followup_template(name=None, followup_num=1):
     """Returns (subject, body) for follow-up emails."""
-    first_name = name.split()[0] if name else ""
+    first_name = name.strip().split()[0] if name and name.strip() else ""
     greeting = f"Hey {first_name}," if first_name else "Hey,"
     subject = random.choice(FOLLOWUP_SUBJECT_LINES)
 

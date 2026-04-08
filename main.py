@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(message)s')
 
 from database import get_stats, get_unsent_emails, get_followup_emails, init_db
-from collectors.facebook_collector import run_facebook_collector
 from collectors.website_collector import run_website_collector
 from sender import start_sender
 
@@ -51,32 +50,32 @@ def main():
 
     while True:
         print("\n=== Menu ===")
-        print("  1. Collect from Facebook")
-        print("  2. Collect from Websites (freelancers + agencies)")
-        print("  3. Collect from Both")
-        print("  4. Send emails (initial + follow-ups)")
-        print("  5. View stats")
-        print("  6. Preview queue")
+        print("  1. Collect from Websites")
+        print("  2. Send emails (initial + follow-ups)")
+        print("  3. View stats")
+        print("  4. Preview queue")
         print("  0. Exit")
 
         choice = input("\nChoice: ").strip()
 
         if choice == '1':
-            run_facebook_collector()
+            try:
+                count = run_website_collector()
+                print(f"\nCollected {count} new emails")
+            except Exception as e:
+                print(f"\nCollection error: {e}")
         elif choice == '2':
-            run_website_collector()
-        elif choice == '3':
-            fb = run_facebook_collector()
-            web = run_website_collector()
-            print(f"\nTotal: {fb + web} (FB: {fb}, Web: {web})")
-        elif choice == '4':
             show_stats()
             confirm = input("Start sending? (y/n): ").strip().lower()
             if confirm == 'y':
-                start_sender()
-        elif choice == '5':
+                try:
+                    sent = start_sender()
+                    print(f"\nSent {sent} emails")
+                except Exception as e:
+                    print(f"\nSending error: {e}")
+        elif choice == '3':
             show_stats()
-        elif choice == '6':
+        elif choice == '4':
             preview_unsent()
         elif choice == '0':
             break

@@ -100,7 +100,7 @@ def run_pipeline(collect=True, send=True, sheets_mgr=None):
         notify_collection_done(web)
 
         # Sync to Sheets after collection
-        if sheets_mgr:
+        if sheets_mgr and sheets_mgr.ws:
             sync_to_sheets(sheets_mgr)
 
     if send:
@@ -147,7 +147,10 @@ def main():
             try:
                 run_pipeline(collect=do_collect, send=do_send, sheets_mgr=sheets_mgr)
             except KeyboardInterrupt:
-                send_telegram("🔴 <b>Bot Stopped</b> (manual)")
+                try:
+                    send_telegram("🔴 <b>Bot Stopped</b> (manual)")
+                except Exception:
+                    pass
                 log.info("Stopped by user")
                 break
             except Exception as e:
@@ -160,7 +163,10 @@ def main():
             try:
                 time.sleep(LOOP_INTERVAL)
             except KeyboardInterrupt:
-                send_telegram("🔴 <b>Bot Stopped</b> (manual)")
+                try:
+                    send_telegram("🔴 <b>Bot Stopped</b> (manual)")
+                except Exception:
+                    pass
                 break
     else:
         run_pipeline(collect=do_collect, send=do_send, sheets_mgr=sheets_mgr)

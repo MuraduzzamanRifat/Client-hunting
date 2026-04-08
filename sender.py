@@ -95,7 +95,7 @@ def send_batch(smtp, emails, template_fn, email_type, sent_count, total_limit):
             # Reconnect
             try:
                 smtp.quit()
-            except:
+            except Exception:
                 pass
             new_smtp = connect_smtp()
             if new_smtp:
@@ -155,7 +155,7 @@ def start_sender():
 
     try:
         smtp.quit()
-    except:
+    except Exception:
         pass
 
     log.info(f"Done: {total_sent} total emails sent")

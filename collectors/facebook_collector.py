@@ -103,7 +103,7 @@ async def scroll_and_collect(page, source_url, total_collected, limit):
 
         try:
             body_text = await page.inner_text('body')
-        except:
+        except Exception:
             break
 
         emails = extract_emails(body_text)
@@ -270,7 +270,7 @@ async def collect_from_facebook():
                             h1 = await page.query_selector('h1')
                             if h1:
                                 name = await h1.inner_text()
-                        except:
+                        except Exception:
                             pass
 
                         found = 0
@@ -284,7 +284,7 @@ async def collect_from_facebook():
                                 total_collected += 1
                                 log.info(f"[{total_collected}] {email} ({name or 'N/A'})")
                         mark_url_visited(profile_url, 'facebook', found)
-                    except:
+                    except Exception:
                         continue
 
                     await asyncio.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))

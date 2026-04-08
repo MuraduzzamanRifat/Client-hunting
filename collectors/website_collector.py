@@ -259,6 +259,11 @@ async def collect_from_websites():
             if total_collected >= DAILY_COLLECT_LIMIT:
                 break
 
+            # Skip queries already searched this session (retry idempotency)
+            query_key = f"query:{query[:60]}"
+            if is_url_visited(query_key):
+                continue
+
             log.info(f'Searching: "{query[:50]}"')
 
             # Alternate between Bing and Google
@@ -317,6 +322,7 @@ async def collect_from_websites():
 
                 time.sleep(random.uniform(1, 3))
 
+            mark_url_visited(query_key, 'search_query', 0)
             await asyncio.sleep(random.uniform(3, 6))
 
         await context.close()
