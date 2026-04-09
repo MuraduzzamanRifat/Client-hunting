@@ -14,7 +14,12 @@ import logging
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urlparse
-from playwright.async_api import async_playwright
+
+try:
+    from playwright.async_api import async_playwright
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
 
 from config import (
     REQUEST_DELAY_MIN, REQUEST_DELAY_MAX, DAILY_COLLECT_LIMIT,
@@ -231,8 +236,47 @@ async def search_google(page, query):
         return []
 
 
-async def collect_from_websites(progress_cb=None):
-    """Search Bing + Google for freelancer/agency websites, scrape emails."""
+def search_requests(query):
+    """Search via requests (no browser). Tries DuckDuckGo lite + Bing."""
+    headers = HEADERS.copy()
+    urls = []
+
+    # Try DuckDuckGo lite (HTML, no JS needed)
+    try:
+        resp = requests.get(f'https://lite.duckduckgo.com/lite/?q={quote(query)}',
+                           headers=headers, timeout=15)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            for a in soup.select('a.result-link, td a[href^="http"]'):
+                href = a.get('href', '')
+                if href.startswith('http') and not any(s in href for s in SKIP_SITE_DOMAINS):
+                    urls.append(href.split('?')[0])
+    except Exception:
+        pass
+
+    if len(urls) < 3:
+        # Fallback: Bing with session
+        try:
+            session = requests.Session()
+            session.get('https://www.bing.com/', headers=headers, timeout=10)
+            resp = session.get(f'https://www.bing.com/search?q={quote(query)}&count=20',
+                              headers=headers, timeout=15)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                for a in soup.find_all('a', href=True):
+                    href = a['href']
+                    if (href.startswith('http') and
+                            not any(s in href for s in SKIP_SITE_DOMAINS) and
+                            'bing.com' not in href and 'microsoft.com' not in href):
+                        urls.append(href.split('?')[0])
+        except Exception:
+            pass
+
+    return list(dict.fromkeys(urls))[:15]
+
+
+async def collect_playwright(progress_cb=None):
+    """Collect using Playwright for search (local PC with browser)."""
     total_collected = 0
     all_found_urls = set()
 
@@ -242,102 +286,109 @@ async def collect_from_websites(progress_cb=None):
 
         context = await p.chromium.launch_persistent_context(
             user_data_dir=BROWSER_DATA_DIR,
-            headless=True,  # No need to see the browser for search
-            slow_mo=50,
+            headless=True, slow_mo=50,
             viewport={'width': 1366, 'height': 900},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            user_agent=HEADERS['User-Agent'],
             args=['--disable-blink-features=AutomationControlled'],
             ignore_default_args=['--enable-automation'],
         )
-
         page = context.pages[0] if context.pages else await context.new_page()
 
-        log.info("Website collector started (Bing + Google search → requests scrape)")
+        total_collected = await _run_queries(page, all_found_urls, progress_cb,
+                                             use_playwright=True)
+        await context.close()
 
-        random.shuffle(SEARCH_QUERIES)
+    return total_collected
 
-        for query in SEARCH_QUERIES:
+
+async def _run_queries(page, all_found_urls, progress_cb, use_playwright=False):
+    """Core query loop — works with Playwright page or requests."""
+    total_collected = 0
+
+    random.shuffle(SEARCH_QUERIES)
+    for idx, query in enumerate(SEARCH_QUERIES):
+        if total_collected >= DAILY_COLLECT_LIMIT:
+            break
+
+        query_key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
+        if is_url_visited(query_key):
+            continue
+
+        log.info(f'Searching: "{query[:50]}"')
+        if progress_cb:
+            progress_cb(idx + 1, len(SEARCH_QUERIES), total_collected)
+
+        # Search
+        if use_playwright and page:
+            if random.random() < 0.5:
+                urls = await search_bing(page, query)
+                if not urls:
+                    urls = await search_google(page, query)
+            else:
+                urls = await search_google(page, query)
+                if not urls:
+                    urls = await search_bing(page, query)
+        else:
+            urls = search_requests(query)
+
+        new_urls = [u for u in urls if u not in all_found_urls]
+        all_found_urls.update(new_urls)
+        log.info(f"  Found {len(new_urls)} new sites")
+
+        for site_url in new_urls:
             if total_collected >= DAILY_COLLECT_LIMIT:
                 break
 
-            # Skip queries already searched this session (retry idempotency)
-            query_key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
-            if is_url_visited(query_key):
+            domain = urlparse(site_url).netloc
+            if is_url_visited(domain):
+                continue
+            if any(skip in domain for skip in SKIP_SITE_DOMAINS):
                 continue
 
-            query_idx = SEARCH_QUERIES.index(query) + 1
-            total_queries = len(SEARCH_QUERIES)
-            log.info(f'Searching: "{query[:50]}"')
-            if progress_cb:
-                progress_cb(query_idx, total_queries, total_collected)
+            log.info(f"  Scraping: {domain}")
+            try:
+                emails = scrape_site_emails(site_url)
+                found = 0
+                for email in emails:
+                    if add_email(email=email, source='website', source_url=site_url):
+                        found += 1
+                        total_collected += 1
+                        log.info(f"    [{total_collected}] {email}")
+                mark_url_visited(domain, 'website', found)
+            except Exception as e:
+                log.warning(f"    Error: {e}")
 
-            # Alternate between Bing and Google
-            if random.random() < 0.5:
-                urls = await search_bing(page, query)
-                engine = "Bing"
-            else:
-                urls = await search_google(page, query)
-                engine = "Google"
+            time.sleep(random.uniform(1, 3))
 
-            # If first engine returned nothing, try the other
-            if not urls:
-                if engine == "Bing":
-                    urls = await search_google(page, query)
-                else:
-                    urls = await search_bing(page, query)
-
-            # Filter duplicates across queries
-            new_urls = [u for u in urls if u not in all_found_urls]
-            all_found_urls.update(new_urls)
-
-            log.info(f"  Found {len(new_urls)} new sites")
-
-            for site_url in new_urls:
-                if total_collected >= DAILY_COLLECT_LIMIT:
-                    break
-
-                domain = urlparse(site_url).netloc
-                if is_url_visited(domain):
-                    continue
-
-                if any(skip in domain for skip in SKIP_SITE_DOMAINS):
-                    continue
-
-                log.info(f"  Scraping: {domain}")
-
-                try:
-                    emails = scrape_site_emails(site_url)
-
-                    found = 0
-                    for email in emails:
-                        is_new = add_email(
-                            email=email,
-                            source='website',
-                            source_url=site_url
-                        )
-                        if is_new:
-                            found += 1
-                            total_collected += 1
-                            log.info(f"    [{total_collected}] {email}")
-
-                    mark_url_visited(domain, 'website', found)
-
-                except Exception as e:
-                    log.warning(f"    Error: {e}")
-
-                time.sleep(random.uniform(1, 3))
-
-            mark_url_visited(query_key, 'search_query', 0)
+        mark_url_visited(query_key, 'search_query', 0)
+        if use_playwright:
             await asyncio.sleep(random.uniform(3, 6))
-
-        await context.close()
+        else:
+            time.sleep(random.uniform(2, 4))
 
     log.info(f"Website collection done: {total_collected} new emails")
     return total_collected
 
 
+def collect_requests_only(progress_cb=None):
+    """Collect using requests only (no browser — for cloud/Koyeb)."""
+    all_found_urls = set()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(
+        _run_queries(None, all_found_urls, progress_cb, use_playwright=False)
+    )
+    loop.close()
+    return result
+
+
 def run_website_collector(progress_cb=None):
-    return asyncio.run(collect_from_websites(progress_cb))
+    if HAS_PLAYWRIGHT:
+        try:
+            return asyncio.run(collect_playwright(progress_cb))
+        except Exception as e:
+            log.warning(f"Playwright failed, falling back to requests: {e}")
+    return collect_requests_only(progress_cb)
 
 
 if __name__ == "__main__":
