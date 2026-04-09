@@ -136,6 +136,47 @@ class SheetsManager:
 
         return len(new_rows)
 
+    def sync_to_db(self):
+        """Pull emails from Sheets INTO SQLite (for cloud/Koyeb startup)."""
+        if not self.ws:
+            return 0
+
+        from database import add_email
+
+        try:
+            rows = self.ws.get_all_records()
+            imported = 0
+            for row in rows:
+                email = row.get('Email', '').strip()
+                if not email:
+                    continue
+                is_new = add_email(
+                    email=email,
+                    name=row.get('Name', '') or None,
+                    source=row.get('Source', '') or None,
+                    source_url=row.get('Source URL', '') or None,
+                )
+                if is_new:
+                    imported += 1
+                    # Update status if already sent
+                    status = row.get('Status', 'new')
+                    if status and status != 'new':
+                        from database import update_status as db_update, get_db
+                        conn = get_db()
+                        try:
+                            r = conn.execute("SELECT id FROM emails WHERE email = ?", (email.lower().strip(),)).fetchone()
+                            if r:
+                                db_update(r['id'], status)
+                        finally:
+                            conn.close()
+
+            if imported > 0:
+                log.info(f"Imported {imported} emails from Sheets to local DB")
+            return imported
+        except Exception as e:
+            log.warning(f"Sheets to DB sync failed: {e}")
+            return 0
+
     def update_status(self, email, status, subject=None, last_sent_at=None):
         """Update an email's status in the sheet using cached row map."""
         if not self.ws:

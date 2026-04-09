@@ -121,9 +121,9 @@ def format_stats():
 # --- Pipeline ---
 
 def run_cycle():
-    """Run one collect + send + check cycle."""
+    """Send + check cycle. Pulls new emails from Sheets first (PC collects, cloud sends)."""
     global sheets_mgr
-    if not _busy.acquire(timeout=300):  # 5 min max wait
+    if not _busy.acquire(timeout=300):
         tg("⚠️ Previous cycle still running — skipping")
         return
     try:
@@ -131,47 +131,46 @@ def run_cycle():
             sheets_mgr = SheetsManager()
             sheets_mgr.connect()
 
-        stats = get_stats()
-        tg(f"🔄 <b>Cycle Started</b>\n"
-           f"📊 {stats['total']} collected | {stats['new']} unsent | {stats['today_sent']}/{DAILY_SEND_LIMIT} today")
-
-        # Collect with progress
-        collect_msg = tg("📥 <b>Collecting...</b>\n" + progress_bar(0, 1))
-        web = 0
-        def on_collect_progress(query_num, total_queries, emails_found):
-            tg_edit(collect_msg,
-                    f"📥 <b>Collecting...</b>\n"
-                    f"{progress_bar(query_num, total_queries)}\n"
-                    f"Query {query_num}/{total_queries} | Found: {emails_found} emails")
-        try:
-            web = run_website_collector(progress_cb=on_collect_progress)
-        except Exception as e:
-            tg(f"⚠️ Collection: {str(e)[:200]}")
-        tg_edit(collect_msg, f"📥 <b>Collection Done</b> — {web} new emails\n{progress_bar(1, 1)}")
-
-        # Sync Sheets
+        # Pull new emails from Sheets (PC puts them there via /collect)
+        imported = 0
         if sheets_mgr and sheets_mgr.ws:
             try:
-                synced = sheets_mgr.sync_from_db(get_all_emails_for_sync())
-                if synced > 0:
-                    notify_sheets_sync(synced)
+                imported = sheets_mgr.sync_to_db()
             except Exception:
                 pass
 
+        stats = get_stats()
+        tg(f"🔄 <b>Cycle Started</b>\n"
+           f"📊 {stats['total']} in DB | {stats['new']} unsent | {stats['today_sent']}/{DAILY_SEND_LIMIT} today"
+           + (f"\n📥 Imported {imported} new from Sheets" if imported > 0 else ""))
+
         # Send with progress
         total_to_send = len(get_unsent_emails(limit=DAILY_SEND_LIMIT))
-        send_msg = tg(f"📤 <b>Sending...</b> (0/{total_to_send})\n" + progress_bar(0, total_to_send))
-        sent = 0
-        def on_send_progress(current, total, email_addr):
-            tg_edit(send_msg,
-                    f"📤 <b>Sending...</b>\n"
-                    f"{progress_bar(current, total)}\n"
-                    f"{current}/{total} | Last: {email_addr}")
-        try:
-            sent = start_sender(progress_cb=on_send_progress)
-        except Exception as e:
-            tg(f"⚠️ Sending: {str(e)[:200]}")
-        tg_edit(send_msg, f"📤 <b>Sending Done</b> — {sent} sent\n{progress_bar(1, 1)}")
+        if total_to_send > 0:
+            send_msg = tg(f"📤 <b>Sending...</b> (0/{total_to_send})\n" + progress_bar(0, total_to_send))
+            sent = 0
+            def on_send_progress(current, total, email_addr):
+                tg_edit(send_msg,
+                        f"📤 <b>Sending...</b>\n"
+                        f"{progress_bar(current, total)}\n"
+                        f"{current}/{total} | Last: {email_addr}")
+            try:
+                sent = start_sender(progress_cb=on_send_progress)
+            except Exception as e:
+                tg(f"⚠️ Sending: {str(e)[:200]}")
+                sent = 0
+            tg_edit(send_msg, f"📤 <b>Sending Done</b> — {sent} sent\n{progress_bar(1, 1)}")
+        else:
+            sent = 0
+            tg("📭 No unsent emails. Run /collect on your PC first.")
+
+        # Sync sent statuses back to Sheets
+        if sheets_mgr and sheets_mgr.ws and sent > 0:
+            try:
+                sheets_mgr.sync_from_db(get_all_emails_for_sync())
+                sheets_mgr.invalidate_cache()
+            except Exception:
+                pass
 
         # Check inbox
         try:
@@ -181,7 +180,7 @@ def run_cycle():
 
         # Report
         _, report = format_stats()
-        tg(f"✅ <b>Cycle Done</b>\n📥 +{web} collected | 📤 {sent} sent\n\n{report}")
+        tg(f"✅ <b>Cycle Done</b>\n📤 {sent} sent\n\n{report}")
     finally:
         _busy.release()
 
@@ -345,6 +344,9 @@ def on_message(msg):
            f"/collect — Collect now\n"
            f"/send — Send now\n"
            f"/check — Check replies/bounces\n"
+           f"\n<b>— How it works —</b>\n"
+           f"/collect runs on your PC (browser)\n"
+           f"Koyeb sends every 3h automatically\n\n"
            f"/pending — LeadGen approvals {lg}\n"
            f"/lgstats — LeadGen stats {lg}\n"
            f"/followup — Follow-ups {lg}\n"
@@ -374,9 +376,25 @@ def on_message(msg):
             return
         tg("📥 Collecting...")
         def _c():
+            global sheets_mgr
             try:
-                n = run_website_collector()
-                tg(f"📥 Done: {n} new emails")
+                collect_msg = tg("📥 <b>Collecting...</b>\n" + progress_bar(0, 1))
+                def on_progress(q, total, found):
+                    tg_edit(collect_msg,
+                            f"📥 <b>Collecting...</b>\n"
+                            f"{progress_bar(q, total)}\n"
+                            f"Query {q}/{total} | Found: {found} emails")
+                n = run_website_collector(progress_cb=on_progress)
+                tg_edit(collect_msg, f"📥 <b>Collection Done</b> — {n} new emails\n{progress_bar(1, 1)}")
+
+                # Sync to Sheets so Koyeb can send them
+                if not sheets_mgr:
+                    sheets_mgr = SheetsManager()
+                    sheets_mgr.connect()
+                if sheets_mgr and sheets_mgr.ws:
+                    synced = sheets_mgr.sync_from_db(get_all_emails_for_sync())
+                    if synced > 0:
+                        tg(f"📋 Synced {synced} emails to Sheets")
             except Exception as e:
                 tg(f"⚠️ {str(e)[:200]}")
             finally:
