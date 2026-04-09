@@ -98,7 +98,7 @@ def connect_smtp():
 MAX_BOUNCE_RATE = 0.03  # 3% — stop sending if exceeded
 
 
-def send_batch(smtp, imap, imap_folder, emails, template_fn, email_type, sent_count, total_limit):
+def send_batch(smtp, imap, imap_folder, emails, template_fn, email_type, sent_count, total_limit, progress_cb=None):
     """Send a batch of emails. Returns number sent."""
     batch_sent = 0
     batch_bounced = 0
@@ -143,6 +143,9 @@ def send_batch(smtp, imap, imap_folder, emails, template_fn, email_type, sent_co
             mark_sent(email_row['id'], subject, 'smtp', email_type)
             batch_sent += 1
 
+            if progress_cb:
+                progress_cb(sent_count + batch_sent, len(emails), to)
+
             # Random delay
             if batch_sent < len(emails):
                 delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
@@ -174,7 +177,7 @@ def send_batch(smtp, imap, imap_folder, emails, template_fn, email_type, sent_co
     return batch_sent
 
 
-def start_sender():
+def start_sender(progress_cb=None):
     """Main sending routine — initial emails + follow-ups."""
     if not SMTP_HOST or not SMTP_PASSWORD:
         log.error("SMTP not configured — fill SMTP_HOST and SMTP_PASSWORD in config.py")
@@ -210,13 +213,13 @@ def start_sender():
 
     # Send new emails first
     if new_emails:
-        sent = send_batch(smtp, imap, imap_folder, new_emails, get_template, 'initial', total_sent, remaining)
+        sent = send_batch(smtp, imap, imap_folder, new_emails, get_template, 'initial', total_sent, remaining, progress_cb)
         total_sent += sent
         log.info(f"Initial: {sent} sent")
 
     # Then follow-ups
     if followup_emails and total_sent < remaining:
-        sent = send_batch(smtp, imap, imap_folder, followup_emails, get_followup_template, 'followup', total_sent, remaining)
+        sent = send_batch(smtp, imap, imap_folder, followup_emails, get_followup_template, 'followup', total_sent, remaining, progress_cb)
         total_sent += sent
         log.info(f"Follow-ups: {sent} sent")
 

@@ -231,7 +231,7 @@ async def search_google(page, query):
         return []
 
 
-async def collect_from_websites():
+async def collect_from_websites(progress_cb=None):
     """Search Bing + Google for freelancer/agency websites, scrape emails."""
     total_collected = 0
     all_found_urls = set()
@@ -265,7 +265,11 @@ async def collect_from_websites():
             if is_url_visited(query_key):
                 continue
 
+            query_idx = SEARCH_QUERIES.index(query) + 1
+            total_queries = len(SEARCH_QUERIES)
             log.info(f'Searching: "{query[:50]}"')
+            if progress_cb:
+                progress_cb(query_idx, total_queries, total_collected)
 
             # Alternate between Bing and Google
             if random.random() < 0.5:
@@ -332,8 +336,8 @@ async def collect_from_websites():
     return total_collected
 
 
-def run_website_collector():
-    return asyncio.run(collect_from_websites())
+def run_website_collector(progress_cb=None):
+    return asyncio.run(collect_from_websites(progress_cb))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, LOG_FILE, DAILY_SEND_LIMIT
-from database import get_stats, init_db, get_all_emails_for_sync
+from database import get_stats, init_db, get_all_emails_for_sync, get_unsent_emails
 from collectors.website_collector import run_website_collector
 from sender import start_sender
 from tracker import check_inbox
@@ -53,16 +53,23 @@ _busy = threading.Lock()  # Prevents overlapping collect/send
 
 
 def tg(text, reply_markup=None):
+    """Send message. Returns message_id for later editing."""
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
     if reply_markup:
         payload["reply_markup"] = json.dumps(reply_markup)
     try:
-        req.post(f"{API_BASE}/sendMessage", json=payload, timeout=10)
+        resp = req.post(f"{API_BASE}/sendMessage", json=payload, timeout=10)
+        data = resp.json()
+        if data.get("ok"):
+            return data["result"]["message_id"]
     except Exception as e:
         log.warning(f"TG send error: {e}")
+    return None
 
 
 def tg_edit(msg_id, text, reply_markup=None):
+    if not msg_id:
+        return
     payload = {"chat_id": TELEGRAM_CHAT_ID, "message_id": msg_id, "text": text, "parse_mode": "HTML"}
     if reply_markup:
         payload["reply_markup"] = json.dumps(reply_markup)
@@ -70,6 +77,16 @@ def tg_edit(msg_id, text, reply_markup=None):
         req.post(f"{API_BASE}/editMessageText", json=payload, timeout=10)
     except Exception:
         pass
+
+
+def progress_bar(current, total, width=15):
+    """Generate text progress bar: [████░░░░░░] 40%"""
+    if total <= 0:
+        return "[" + "░" * width + "] 0%"
+    pct = min(current / total, 1.0)
+    filled = int(width * pct)
+    bar = "█" * filled + "░" * (width - filled)
+    return f"[{bar}] {int(pct * 100)}%"
 
 
 def tg_answer(callback_id, text=""):
@@ -112,14 +129,19 @@ def run_cycle():
         tg(f"🔄 <b>Cycle Started</b>\n"
            f"📊 {stats['total']} collected | {stats['new']} unsent | {stats['today_sent']}/{DAILY_SEND_LIMIT} today")
 
-        # Collect
+        # Collect with progress
+        collect_msg = tg("📥 <b>Collecting...</b>\n" + progress_bar(0, 1))
         web = 0
+        def on_collect_progress(query_num, total_queries, emails_found):
+            tg_edit(collect_msg,
+                    f"📥 <b>Collecting...</b>\n"
+                    f"{progress_bar(query_num, total_queries)}\n"
+                    f"Query {query_num}/{total_queries} | Found: {emails_found} emails")
         try:
-            web = run_website_collector()
+            web = run_website_collector(progress_cb=on_collect_progress)
         except Exception as e:
             tg(f"⚠️ Collection: {str(e)[:200]}")
-        if web > 0:
-            tg(f"📥 {web} new emails collected")
+        tg_edit(collect_msg, f"📥 <b>Collection Done</b> — {web} new emails\n{progress_bar(1, 1)}")
 
         # Sync Sheets
         if sheets_mgr and sheets_mgr.ws:
@@ -130,12 +152,20 @@ def run_cycle():
             except Exception:
                 pass
 
-        # Send
+        # Send with progress
+        total_to_send = len(get_unsent_emails(limit=DAILY_SEND_LIMIT))
+        send_msg = tg(f"📤 <b>Sending...</b> (0/{total_to_send})\n" + progress_bar(0, total_to_send))
         sent = 0
+        def on_send_progress(current, total, email_addr):
+            tg_edit(send_msg,
+                    f"📤 <b>Sending...</b>\n"
+                    f"{progress_bar(current, total)}\n"
+                    f"{current}/{total} | Last: {email_addr}")
         try:
-            sent = start_sender()
+            sent = start_sender(progress_cb=on_send_progress)
         except Exception as e:
             tg(f"⚠️ Sending: {str(e)[:200]}")
+        tg_edit(send_msg, f"📤 <b>Sending Done</b> — {sent} sent\n{progress_bar(1, 1)}")
 
         # Check inbox
         try:
