@@ -49,6 +49,7 @@ INTERVAL = 3 * 60 * 60  # 3 hours
 pipeline_running = False
 pipeline_thread = None
 sheets_mgr = None
+_busy = threading.Lock()  # Prevents overlapping collect/send
 
 
 def tg(text, reply_markup=None):
@@ -79,63 +80,72 @@ def tg_answer(callback_id, text=""):
         pass
 
 
+def format_stats():
+    """Shared stats formatter."""
+    stats = get_stats()
+    total_sent = stats['sent'] + stats['replied'] + stats['bounced']
+    return stats, (
+        f"📨 Collected: {stats['total']}\n"
+        f"📭 Unsent: {stats['new']}\n"
+        f"✅ Sent: {total_sent}\n"
+        f"💬 Replies: {stats['replied']} ({stats['reply_rate']}%)\n"
+        f"🔴 Bounced: {stats['bounced']} ({stats['bounce_rate']}%)\n"
+        f"📬 Today: {stats['today_sent']}/{DAILY_SEND_LIMIT}\n"
+        f"⏳ Follow-ups: {stats['due_followup']}"
+    )
+
+
 # --- Pipeline ---
 
 def run_cycle():
     """Run one collect + send + check cycle."""
     global sheets_mgr
-
-    if not sheets_mgr:
-        sheets_mgr = SheetsManager()
-        sheets_mgr.connect()
-
-    stats = get_stats()
-    tg(f"🔄 <b>Cycle Started</b>\n"
-       f"📊 {stats['total']} collected | {stats['new']} unsent | {stats['today_sent']}/{DAILY_SEND_LIMIT} today")
-
-    # Collect
-    web = 0
+    _busy.acquire()
     try:
-        web = run_website_collector()
-    except Exception as e:
-        tg(f"⚠️ Collection: {str(e)[:200]}")
-    if web > 0:
-        tg(f"📥 {web} new emails collected")
+        if not sheets_mgr:
+            sheets_mgr = SheetsManager()
+            sheets_mgr.connect()
 
-    # Sync Sheets
-    if sheets_mgr and sheets_mgr.ws:
+        stats = get_stats()
+        tg(f"🔄 <b>Cycle Started</b>\n"
+           f"📊 {stats['total']} collected | {stats['new']} unsent | {stats['today_sent']}/{DAILY_SEND_LIMIT} today")
+
+        # Collect
+        web = 0
         try:
-            synced = sheets_mgr.sync_from_db(get_all_emails_for_sync())
-            if synced > 0:
-                notify_sheets_sync(synced)
+            web = run_website_collector()
+        except Exception as e:
+            tg(f"⚠️ Collection: {str(e)[:200]}")
+        if web > 0:
+            tg(f"📥 {web} new emails collected")
+
+        # Sync Sheets
+        if sheets_mgr and sheets_mgr.ws:
+            try:
+                synced = sheets_mgr.sync_from_db(get_all_emails_for_sync())
+                if synced > 0:
+                    notify_sheets_sync(synced)
+            except Exception:
+                pass
+
+        # Send
+        sent = 0
+        try:
+            sent = start_sender()
+        except Exception as e:
+            tg(f"⚠️ Sending: {str(e)[:200]}")
+
+        # Check inbox
+        try:
+            check_inbox()
         except Exception:
             pass
 
-    # Send
-    sent = 0
-    try:
-        sent = start_sender()
-    except Exception as e:
-        tg(f"⚠️ Sending: {str(e)[:200]}")
-
-    # Check inbox
-    inbox = {'replies': 0, 'bounces': 0}
-    try:
-        inbox = check_inbox()
-    except Exception:
-        pass
-
-    # Report
-    stats = get_stats()
-    total_sent = stats['sent'] + stats['replied'] + stats['bounced']
-    tg(f"✅ <b>Cycle Done</b>\n\n"
-       f"📥 Collected: {web}\n"
-       f"📤 Sent: {sent}\n"
-       f"💬 Replies: {stats['replied']} ({stats['reply_rate']}%)\n"
-       f"🔴 Bounced: {stats['bounced']} ({stats['bounce_rate']}%)\n"
-       f"📬 Today: {stats['today_sent']}/{DAILY_SEND_LIMIT}\n"
-       f"📭 Unsent: {stats['new']}\n"
-       f"⏳ Follow-ups due: {stats['due_followup']}")
+        # Report
+        _, report = format_stats()
+        tg(f"✅ <b>Cycle Done</b>\n📥 +{web} collected | 📤 {sent} sent\n\n{report}")
+    finally:
+        _busy.release()
 
 
 def pipeline_loop():
@@ -316,19 +326,14 @@ def on_message(msg):
             tg("🔴 Stopping...")
 
     elif text == "/status":
-        stats = get_stats()
-        total_sent = stats['sent'] + stats['replied'] + stats['bounced']
         running = "🟢 Running" if pipeline_running else "🔴 Stopped"
-        tg(f"📊 <b>Status</b> {running}\n\n"
-           f"📨 Collected: {stats['total']}\n"
-           f"📭 Unsent: {stats['new']}\n"
-           f"✅ Sent: {total_sent}\n"
-           f"💬 Replies: {stats['replied']} ({stats['reply_rate']}%)\n"
-           f"🔴 Bounced: {stats['bounced']} ({stats['bounce_rate']}%)\n"
-           f"📬 Today: {stats['today_sent']}/{DAILY_SEND_LIMIT}\n"
-           f"⏳ Follow-ups: {stats['due_followup']}")
+        _, report = format_stats()
+        tg(f"📊 <b>Status</b> {running}\n\n{report}")
 
     elif text == "/collect":
+        if not _busy.acquire(blocking=False):
+            tg("⏳ Already running a task. Wait.")
+            return
         tg("📥 Collecting...")
         def _c():
             try:
@@ -336,9 +341,14 @@ def on_message(msg):
                 tg(f"📥 Done: {n} new emails")
             except Exception as e:
                 tg(f"⚠️ {str(e)[:200]}")
+            finally:
+                _busy.release()
         threading.Thread(target=_c, daemon=True).start()
 
     elif text == "/send":
+        if not _busy.acquire(blocking=False):
+            tg("⏳ Already running a task. Wait.")
+            return
         tg("📤 Sending...")
         def _s():
             try:
@@ -347,6 +357,8 @@ def on_message(msg):
                 tg(f"📤 Done: {n} sent | Today: {s['today_sent']}/{DAILY_SEND_LIMIT}")
             except Exception as e:
                 tg(f"⚠️ {str(e)[:200]}")
+            finally:
+                _busy.release()
         threading.Thread(target=_s, daemon=True).start()
 
     elif text == "/check":
