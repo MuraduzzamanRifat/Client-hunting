@@ -1,22 +1,15 @@
-"""Configuration for email outreach system.
+"""Configuration — uses environment variables (for cloud deploy like Koyeb).
 
-Copy this file to config.py and fill in your credentials.
+Local: copy to config.py and hardcode values.
+Cloud: set env vars in Koyeb dashboard.
 """
 
 import os
 
 # --- Browser ---
-BROWSER_HEADLESS = False
-SLOW_MO = 100
+BROWSER_HEADLESS = True
+SLOW_MO = 50
 BROWSER_DATA_DIR = os.path.join(os.path.dirname(__file__), "browser_data")
-
-# --- Facebook Auto-Login ---
-FB_EMAIL = ""
-FB_PASSWORD = ""
-
-# --- Instagram Auto-Login ---
-IG_USERNAME = ""
-IG_PASSWORD = ""
 
 # --- Scroll Settings ---
 SCROLL_PAUSE_MIN = 2.0
@@ -34,20 +27,28 @@ REQUEST_DELAY_MAX = 8
 TARGET_COUNTRY = "Bangladesh"
 TARGET_AUDIENCE = "freelancers"
 
-# --- SMTP (for sending) ---
-SMTP_HOST = ""
-SMTP_PORT = 465
-SMTP_EMAIL = ""
-SMTP_PASSWORD = ""
+# --- SMTP ---
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 # --- Sending ---
-DAILY_SEND_LIMIT = 50
-SEND_DELAY_MIN = 60
-SEND_DELAY_MAX = 180
+DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "25"))
+SEND_DELAY_MIN = 90
+SEND_DELAY_MAX = 240
 
 # --- Follow-up ---
 FOLLOWUP_AFTER_DAYS = 3
 MAX_FOLLOWUPS = 2
+
+# --- Telegram ---
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# --- Google Sheets ---
+GOOGLE_CREDS_FILE = os.getenv("GOOGLE_CREDS_FILE", os.path.join(os.path.dirname(__file__), "credentials.json"))
+SHEET_NAME = "Lead CRM"
 
 # --- Logging ---
 LOG_FILE = os.path.join(os.path.dirname(__file__), "outreach.log")
@@ -57,30 +58,31 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "outreach.db")
 
 # --- Email Template ---
 SUBJECT_LINES = [
-    "Stop wasting connects — this changes everything",
-    "You're applying wrong on Upwork (fix this now)",
-    "This AI tells you which jobs will reply",
-    "Why you're getting 0 replies on Upwork",
-    "Apply to fewer jobs, get more clients",
-    "The 5-second mistake killing your proposals",
-    "Top freelancers are using this (you're not)",
-    "This tool writes proposals that get replies",
-    "You're one good client away — don't miss it",
-    "Most freelancers ignore this (big mistake)",
-    "Turn 5 proposals into 2 clients",
-    "This changes how you use Upwork forever",
-    "Still writing proposals manually? Read this",
-    "From ignored to hired — fix this today",
-    "Your Upwork strategy is broken (here's why)",
+    "quick question about your Upwork",
+    "noticed something about your profile",
+    "thought of you",
+    "curious about something",
+    "re: Upwork proposals",
+    "idea for you",
+    "saw your work",
+    "this might help",
+    "honest question",
+    "2 minute read",
 ]
 
 FOLLOWUP_SUBJECT_LINES = [
-    "Just following up — did you see this?",
-    "Quick reminder about your Upwork profile",
-    "Still interested? The offer stands",
-    "Don't miss this — freelancers are loving it",
+    "re: my last note",
+    "bumping this",
+    "any thoughts?",
+    "last one from me",
 ]
 
 SENDER_NAME = "ProWorkspace"
 EXTENSION_URL = "https://proworkspace.online/"
 PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
+
+# --- IMAP ---
+IMAP_HOST = os.getenv("IMAP_HOST", SMTP_HOST)
+IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+IMAP_EMAIL = SMTP_EMAIL
+IMAP_PASSWORD = SMTP_PASSWORD

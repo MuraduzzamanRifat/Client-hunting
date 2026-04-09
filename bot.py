@@ -23,6 +23,12 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+# On Koyeb: config.py doesn't exist (gitignored), use config.example.py (reads env vars)
+_dir = os.path.dirname(__file__)
+if not os.path.exists(os.path.join(_dir, "config.py")):
+    import shutil
+    shutil.copy(os.path.join(_dir, "config.example.py"), os.path.join(_dir, "config.py"))
+
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, LOG_FILE, DAILY_SEND_LIMIT
 from database import get_stats, init_db, get_all_emails_for_sync, get_unsent_emails
 from collectors.website_collector import run_website_collector
