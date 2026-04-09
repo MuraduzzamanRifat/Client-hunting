@@ -424,10 +424,33 @@ def on_callback(cb):
     handle_leadgen_callback(cb)
 
 
+# --- Health endpoint for Koyeb ---
+
+def start_health_server():
+    """Tiny HTTP server so Koyeb knows the process is alive."""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+        def log_message(self, *args):
+            pass  # Silence access logs
+
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
+
+
 # --- Main ---
 
 def main():
     init_db()
+
+    # Start health server for Koyeb (background)
+    threading.Thread(target=start_health_server, daemon=True).start()
+
     log.info("Starting LeadOutreach bot...")
 
     tg("🤖 <b>LeadOutreach Bot Online</b>\nType /start to begin.")
