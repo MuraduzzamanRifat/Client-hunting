@@ -85,6 +85,9 @@ SENDER_NAME = "ProWorkspace"
 EXTENSION_URL = "https://proworkspace.online/"
 PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
 
+# --- Search API (for cloud collection) ---
+SERPER_API_KEY = "107c448582a70725c7adce5f1ed9e6f59b5e1dc5"
+
 # --- IMAP (for reply/bounce tracking) ---
 IMAP_HOST = "mail.brandivibe.com"
 IMAP_PORT = 993

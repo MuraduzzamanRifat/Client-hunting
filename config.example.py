@@ -81,6 +81,9 @@ SENDER_NAME = "ProWorkspace"
 EXTENSION_URL = "https://proworkspace.online/"
 PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
 
+# --- Search API ---
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+
 # --- IMAP ---
 IMAP_HOST = os.getenv("IMAP_HOST", SMTP_HOST)
 IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
