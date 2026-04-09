@@ -100,7 +100,9 @@ def format_stats():
 def run_cycle():
     """Run one collect + send + check cycle."""
     global sheets_mgr
-    _busy.acquire()
+    if not _busy.acquire(timeout=300):  # 5 min max wait
+        tg("⚠️ Previous cycle still running — skipping")
+        return
     try:
         if not sheets_mgr:
             sheets_mgr = SheetsManager()
