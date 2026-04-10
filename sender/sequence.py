@@ -4,13 +4,13 @@ Handles: initial email, follow-up 1 (day 2-3), follow-up 2 (day 5).
 """
 
 import time
-from rich.console import Console
+import logging
 
 import config
 from db import get_leads_needing_step, update_lead
 from sender.smtp_sender import EmailSender
 
-console = Console()
+log = logging.getLogger(__name__)
 
 
 STEPS = [
@@ -29,10 +29,10 @@ def run_sequence(sender_name="", dry_run=False):
         leads = get_leads_needing_step(step["key"], step["delay_days"])
 
         if not leads:
-            console.print(f"  [dim]{step['key']}: no leads ready[/dim]")
+            log.info(f"  [dim]{step['key']}: no leads ready[/dim]")
             continue
 
-        console.print(f"  [bold]{step['key']}[/bold]: {len(leads)} leads ready")
+        log.info(f"  [bold]{step['key']}[/bold]: {len(leads)} leads ready")
 
         seq = config.EMAIL_SEQUENCES[step["config_key"]]
 
@@ -53,13 +53,13 @@ def run_sequence(sender_name="", dry_run=False):
             )
 
             if dry_run:
-                console.print(f"    [yellow]DRY RUN[/yellow] → {lead['email']} | {subject}")
+                log.info(f"    [yellow]DRY RUN[/yellow] → {lead['email']} | {subject}")
                 total_sent += 1
                 continue
 
             # Check capacity
             if sender.get_remaining_capacity() <= 0:
-                console.print("  [red]Daily limit reached across all inboxes[/red]")
+                log.info("  [red]Daily limit reached across all inboxes[/red]")
                 return total_sent
 
             success, msg = sender.send_email(
@@ -72,11 +72,11 @@ def run_sequence(sender_name="", dry_run=False):
             )
 
             if success:
-                console.print(f"    [green]OK[/green] → {lead['email']} | {msg}")
+                log.info(f"    [green]OK[/green] → {lead['email']} | {msg}")
                 update_lead(lead["id"], status="contacted")
                 total_sent += 1
             else:
-                console.print(f"    [red]FAIL[/red] → {lead['email']} | {msg}")
+                log.info(f"    [red]FAIL[/red] → {lead['email']} | {msg}")
 
             time.sleep(config.DELAY_BETWEEN_EMAILS)
 

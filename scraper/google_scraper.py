@@ -33,12 +33,21 @@ def search_shopify_stores(niche, max_results=100):
 
 
 def _ddg_search(query, max_results=20):
-    """DuckDuckGo search — no API key needed."""
+    """DuckDuckGo search via HTML scraping (no extra packages needed)."""
     try:
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            results = ddgs.text(query, max_results=max_results)
-            return [r["href"] for r in results if "href" in r]
+        from bs4 import BeautifulSoup
+        resp = requests.get("https://html.duckduckgo.com/html/", params={"q": query},
+                           headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"},
+                           timeout=15)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        urls = []
+        for a in soup.select("a.result__a"):
+            href = a.get("href", "")
+            if href.startswith("http"):
+                urls.append(href)
+            if len(urls) >= max_results:
+                break
+        return urls
     except Exception as e:
         print(f"  DuckDuckGo error: {e}")
         return []

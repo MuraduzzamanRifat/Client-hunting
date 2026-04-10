@@ -1,8 +1,5 @@
 flask>=3.0
 gunicorn>=21.2
-click>=8.0
 requests>=2.31
 beautifulsoup4>=4.12
-duckduckgo-search>=4.0
 python-dotenv>=1.0
-rich>=13.0
