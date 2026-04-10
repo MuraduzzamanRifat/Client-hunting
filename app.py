@@ -114,6 +114,7 @@ def maps_page():
         query = request.form.get("query", "").strip()
         location = request.form.get("location", "").strip()
         max_results = int(request.form.get("max_results", 20))
+        method = request.form.get("method", "auto")
         if not query:
             return render_template("maps.html", error="Search query is required")
 
@@ -125,10 +126,36 @@ def maps_page():
                 from scraper.maps_scraper import search_google_maps, extract_email_from_website
                 from scraper.website_auditor import audit_website
                 _jobs[job_id]["log"].append(f"Searching Google Maps: {query}")
+                _jobs[job_id]["log"].append(f"Method: {method}")
                 if location:
                     _jobs[job_id]["log"].append(f"Location: {location}")
 
-                businesses = search_google_maps(query, location=location, num_results=max_results)
+                businesses = []
+                if method == "direct":
+                    from scraper.direct_maps_scraper import search_maps_direct
+                    from scraper.proxy_manager import ProxyManager
+                    _jobs[job_id]["log"].append("Using direct scraping (no API)...")
+                    businesses = search_maps_direct(query, location=location,
+                                                    num_results=max_results,
+                                                    proxy_manager=ProxyManager())
+                elif method == "outscraper":
+                    _jobs[job_id]["log"].append("Using Outscraper API...")
+                    businesses = search_google_maps(query, location=location, num_results=max_results)
+                else:  # auto
+                    import config as cfg
+                    if cfg.OUTSCRAPER_API_KEY:
+                        _jobs[job_id]["log"].append("Using Outscraper API (auto-detected)...")
+                        businesses = search_google_maps(query, location=location, num_results=max_results)
+                    elif cfg.SERPER_API_KEY:
+                        _jobs[job_id]["log"].append("Using Serper API (auto-detected)...")
+                        businesses = search_google_maps(query, location=location, num_results=max_results)
+                    else:
+                        from scraper.direct_maps_scraper import search_maps_direct
+                        from scraper.proxy_manager import ProxyManager
+                        _jobs[job_id]["log"].append("Using direct scraping (no API key found)...")
+                        businesses = search_maps_direct(query, location=location,
+                                                        num_results=max_results,
+                                                        proxy_manager=ProxyManager())
                 _jobs[job_id]["total"] = len(businesses)
                 _jobs[job_id]["log"].append(f"Found {len(businesses)} businesses")
 
@@ -369,11 +396,29 @@ def api_add_lead():
     data = request.get_json()
     if not data or not data.get("domain"):
         return jsonify({"error": "domain required"}), 400
-    db.add_lead(
-        data["domain"], data.get("store_name", ""), data.get("email"),
-        data.get("niche", "ecommerce"), data.get("source", "api")
+    added = db.add_lead(
+        domain=data["domain"],
+        store_name=data.get("store_name", ""),
+        email=data.get("email"),
+        niche=data.get("niche", "ecommerce"),
+        source=data.get("source", "api"),
+        phone=data.get("phone"),
+        address=data.get("address"),
+        rating=data.get("rating"),
+        website=data.get("website"),
+        score=data.get("score", 0),
+        has_chatbot=data.get("has_chatbot", 0),
+        has_automation=data.get("has_automation", 0),
+        load_time=data.get("load_time"),
     )
-    return jsonify({"status": "ok"})
+    # Set first_line if provided
+    if added and data.get("first_line"):
+        conn = db.get_conn()
+        lead = conn.execute("SELECT id FROM leads WHERE domain = ?", (data["domain"],)).fetchone()
+        conn.close()
+        if lead:
+            db.update_lead(lead["id"], first_line=data["first_line"])
+    return jsonify({"status": "ok", "added": added})
 
 
 # ──────────────────────────────────────────────
