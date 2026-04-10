@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Scrape — ColdMail AI{% endblock %}
+{% block content %}
+<h4 class="mb-4">Scrape Shopify Stores</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Niche</label>
+                    <input type="text" class="form-control" name="niche" placeholder="e.g. fitness apparel, pet supplies, skincare" required>
+                    <div class="form-text">What type of Shopify stores to find</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Max Results</label>
+                    <input type="number" class="form-control" name="max_results" value="50" min="10" max="200">
+                </div>
+                <button type="submit" class="btn btn-success w-100">
+                    <i class="bi bi-search"></i> Start Scraping
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h6>How it works</h6>
+            <ul class="text-muted mb-0">
+                <li>Searches Google/DuckDuckGo for Shopify stores in your niche</li>
+                <li>Crawls each store for contact emails</li>
+                <li>Prioritizes info@, contact@, hello@ over support@</li>
+                <li>Saves all leads to database with store name + domain</li>
+                <li>Runs in background — check progress on the job page</li>
+            </ul>
+        </div>
+
+        <div class="stat-card mt-3">
+            <h6>Search Queries Used</h6>
+            <ul class="text-muted small mb-0">
+                <li><code>site:myshopify.com {niche}</code></li>
+                <li><code>best Shopify stores in {niche}</code></li>
+                <li><code>top Shopify {niche} stores</code></li>
+                <li><code>"powered by Shopify" {niche}</code></li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

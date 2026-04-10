@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Leads — ColdMail AI{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Leads <span class="text-muted">({{ total }})</span></h4>
+    <div class="d-flex gap-2">
+        <!-- Filter -->
+        <div class="btn-group btn-group-sm">
+            <a href="/leads" class="btn btn-outline-secondary {% if not status_filter %}active{% endif %}">All</a>
+            <a href="/leads?status=new" class="btn btn-outline-secondary {% if status_filter == 'new' %}active{% endif %}">New</a>
+            <a href="/leads?status=contacted" class="btn btn-outline-secondary {% if status_filter == 'contacted' %}active{% endif %}">Contacted</a>
+            <a href="/leads?status=replied" class="btn btn-outline-secondary {% if status_filter == 'replied' %}active{% endif %}">Replied</a>
+        </div>
+        <!-- Import -->
+        <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="bi bi-upload"></i> Import CSV
+        </button>
+        <a href="/export?format=csv{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn btn-sm btn-outline-info">
+            <i class="bi bi-download"></i> Export
+        </a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover">
+        <thead>
+            <tr>
+                <th>ID</th><th>Domain</th><th>Store</th><th>Email</th>
+                <th>Niche</th><th>Status</th><th>First Line</th><th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for lead in leads %}
+            <tr>
+                <td class="text-muted">{{ lead.id }}</td>
+                <td><a href="https://{{ lead.domain }}" target="_blank" class="text-decoration-none">{{ lead.domain }}</a></td>
+                <td>{{ lead.store_name or '-' }}</td>
+                <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
+                <td><span class="badge bg-secondary">{{ lead.niche or '-' }}</span></td>
+                <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
+                <td class="text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    {{ lead.first_line or '-' }}
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        {% if lead.status != 'replied' %}
+                        <form action="/reply/{{ lead.id }}" method="POST" class="d-inline">
+                            <input type="hidden" name="notes" value="">
+                            <button class="btn btn-outline-warning btn-sm" title="Mark replied"><i class="bi bi-reply"></i></button>
+                        </form>
+                        {% endif %}
+                        <form action="/delete/{{ lead.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this lead?')">
+                            <button class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if total > per_page %}
+<nav>
+    <ul class="pagination pagination-sm justify-content-center">
+        {% for p in range(1, (total // per_page) + 2) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="/leads?page={{ p }}{% if status_filter %}&status={{ status_filter }}{% endif %}">{{ p }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Import CSV</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/import" method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <p class="text-muted">CSV with columns: <code>domain, store_name, email</code></p>
+                    <div class="mb-3">
+                        <input type="file" class="form-control" name="file" accept=".csv" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Niche</label>
+                        <input type="text" class="form-control" name="niche" value="ecommerce">
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="submit" class="btn btn-success">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

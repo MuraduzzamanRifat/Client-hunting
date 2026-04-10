@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job_id }} — ColdMail AI{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Job: {{ job_id }}</h4>
+    <span class="badge {% if job.status == 'running' %}bg-warning{% elif job.status == 'done' %}bg-success{% else %}bg-danger{% endif %} fs-6">
+        {{ job.status }}
+    </span>
+</div>
+
+{% if job.total is defined and job.total > 0 %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between mb-1">
+        <span>Progress: {{ job.progress }}/{{ job.total }}</span>
+        {% if job.added is defined %}
+        <span class="text-success">{{ job.added }} leads with email</span>
+        {% endif %}
+    </div>
+    <div class="progress" style="height: 8px;">
+        <div class="progress-bar progress-bar-custom" style="width: {{ (job.progress / job.total * 100) if job.total > 0 else 0 }}%"></div>
+    </div>
+</div>
+{% endif %}
+
+<div class="stat-card">
+    <h6 class="mb-3">Log</h6>
+    <div id="logBox" style="max-height: 500px; overflow-y: auto; font-family: monospace; font-size: .85rem; line-height: 1.6;">
+        {% for line in job.log %}
+        <div class="{% if '[OK]' in line %}text-success{% elif '[ERROR]' in line %}text-danger{% elif '[NO EMAIL]' in line %}text-warning{% else %}text-muted{% endif %}">{{ line }}</div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if job.status == 'done' %}
+<div class="mt-3">
+    <a href="/leads" class="btn btn-outline-success">View Leads</a>
+    <a href="/" class="btn btn-outline-secondary">Dashboard</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if job.status == 'running' %}
+<script>
+(function poll() {
+    fetch('/api/job/{{ job_id }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) return;
+            // Update page
+            location.reload();
+            if (data.status === 'running') {
+                setTimeout(poll, 3000);
+            }
+        })
+        .catch(() => setTimeout(poll, 5000));
+})();
+</script>
+{% endif %}
+{% endblock %}

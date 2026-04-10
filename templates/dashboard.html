@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ColdMail AI{% endblock %}
+{% block content %}
+<h4 class="mb-4">Dashboard</h4>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>Total Leads</small>
+            <h3>{{ stats.total_leads }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>With Email</small>
+            <h3 class="text-success">{{ stats.with_email }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>Contacted</small>
+            <h3 class="text-info">{{ stats.contacted }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>Replied</small>
+            <h3 class="text-warning">{{ stats.replied }}</h3>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>Sent Today</small>
+            <h3>{{ stats.today_sent }}</h3>
+        </div>
+    </div>
+    {% for step, count in stats.by_step.items() %}
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>{{ step.replace('_', ' ').title() }}</small>
+            <h3>{{ count }}</h3>
+        </div>
+    </div>
+    {% endfor %}
+    {% if stats.contacted > 0 %}
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>Reply Rate</small>
+            <h3>{{ "%.1f" | format(stats.replied / stats.contacted * 100) }}%</h3>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <a href="/scrape" class="btn btn-outline-success w-100 py-3">
+            <i class="bi bi-search"></i> Scrape New Leads
+        </a>
+    </div>
+    <div class="col-md-4">
+        <form action="/personalize" method="POST" class="d-inline w-100">
+            <input type="hidden" name="limit" value="50">
+            <button class="btn btn-outline-info w-100 py-3">
+                <i class="bi bi-magic"></i> Personalize Leads
+            </button>
+        </form>
+    </div>
+    <div class="col-md-4">
+        <a href="/send" class="btn btn-outline-primary w-100 py-3">
+            <i class="bi bi-send"></i> Send Sequence
+        </a>
+    </div>
+</div>
+
+<!-- Recent Leads -->
+<h5 class="mb-3">Recent Leads</h5>
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr><th>Domain</th><th>Store</th><th>Email</th><th>Status</th><th>Added</th></tr>
+        </thead>
+        <tbody>
+        {% for lead in leads %}
+            <tr>
+                <td>{{ lead.domain }}</td>
+                <td>{{ lead.store_name or '-' }}</td>
+                <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
+                <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
+                <td class="text-muted">{{ lead.created_at[:10] if lead.created_at else '' }}</td>
+            </tr>
+        {% endfor %}
+        {% if not leads %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No leads yet. Start by scraping!</td></tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

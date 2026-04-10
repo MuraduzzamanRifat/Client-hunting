@@ -1,95 +1,92 @@
-"""Configuration for email outreach system."""
-
 import os
+from dotenv import load_dotenv
 
-# --- Browser ---
-BROWSER_HEADLESS = False
-SLOW_MO = 100
-BROWSER_DATA_DIR = os.path.join(os.path.dirname(__file__), "browser_data")
+load_dotenv()
 
-# --- Facebook Auto-Login ---
-FB_EMAIL = "mahadih.jk@gmail.com"
-FB_PASSWORD = "#@#Mj91#@#"
 
-# --- Instagram Auto-Login ---
-IG_USERNAME = ""
-IG_PASSWORD = ""
+# SMTP
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
 
-# --- Scroll Settings ---
-SCROLL_PAUSE_MIN = 2.0
-SCROLL_PAUSE_MAX = 5.0
-MAX_SCROLLS = 50
-SCROLL_DISTANCE_MIN = 300
-SCROLL_DISTANCE_MAX = 700
+# Multiple inboxes: "email:pass,email2:pass2"
+def get_sender_inboxes():
+    raw = os.getenv("SENDER_INBOXES", "")
+    if not raw:
+        if SMTP_USER and SMTP_PASS:
+            return [{"email": SMTP_USER, "password": SMTP_PASS}]
+        return []
+    inboxes = []
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if ":" in pair:
+            email, password = pair.split(":", 1)
+            inboxes.append({"email": email.strip(), "password": password.strip()})
+    return inboxes
 
-# --- Collection ---
-DAILY_COLLECT_LIMIT = 200
-REQUEST_DELAY_MIN = 3
-REQUEST_DELAY_MAX = 8
 
-# --- Target ---
-TARGET_COUNTRY = "Bangladesh"
-TARGET_AUDIENCE = "freelancers"
+# Search
+SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 
-# --- SMTP (for sending) ---
-SMTP_HOST = "mail.brandivibe.com"
-SMTP_PORT = 465
-SMTP_EMAIL = "knock@brandivibe.com"
-SMTP_PASSWORD = "Vk+#awH_&]Y3MF]."
+# AI
+AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# --- Sending ---
-DAILY_SEND_LIMIT = 25  # Warming phase — increase weekly: 25 > 35 > 50
-SEND_DELAY_MIN = 90    # 1.5 min minimum between emails
-SEND_DELAY_MAX = 240   # 4 min max — more human-like
+# Sending limits
+DAILY_LIMIT_PER_INBOX = int(os.getenv("DAILY_LIMIT_PER_INBOX", "20"))
+DELAY_BETWEEN_EMAILS = int(os.getenv("DELAY_BETWEEN_EMAILS", "60"))
+WARMUP_DAYS = int(os.getenv("WARMUP_DAYS", "7"))
 
-# --- Follow-up ---
-FOLLOWUP_AFTER_DAYS = 3
-MAX_FOLLOWUPS = 2
-
-# --- Telegram Notifications ---
-TELEGRAM_BOT_TOKEN = "8715922113:AAFOeC7gtmn-ID7L6rAdyZVItY4sMEhFl0w"
-TELEGRAM_CHAT_ID = "7120141572"
-
-# --- Google Sheets ---
-GOOGLE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "credentials.json")
-SHEET_NAME = "Lead CRM"  # Existing sheet — adds "Outreach" tab
-
-# --- Logging ---
-LOG_FILE = os.path.join(os.path.dirname(__file__), "outreach.log")
-
-# --- Database ---
-DB_PATH = os.path.join(os.path.dirname(__file__), "outreach.db")
-
-# --- Email Template ---
-SUBJECT_LINES = [
-    "quick question about your Upwork",
-    "noticed something about your profile",
-    "thought of you",
-    "curious about something",
-    "re: Upwork proposals",
-    "idea for you",
-    "saw your work",
-    "this might help",
-    "honest question",
-    "2 minute read",
+# Search queries for Shopify stores
+SEARCH_QUERIES = [
+    'site:myshopify.com {niche}',
+    'best Shopify stores in {niche}',
+    'top Shopify {niche} stores',
+    '"powered by Shopify" {niche}',
+    '{niche} store shopify',
 ]
 
-FOLLOWUP_SUBJECT_LINES = [
-    "re: my last note",
-    "bumping this",
-    "any thoughts?",
-    "last one from me",
-]
+# Email sequences
+EMAIL_SEQUENCES = {
+    "subject_options": [
+        "Quick fix for your store",
+        "Reduce support load?",
+        "Saw your {store_name} store",
+    ],
+    "email_1": {
+        "delay_days": 0,
+        "subject": "Quick question about {store_name}",
+        "body": """{first_line}
 
-SENDER_NAME = "ProWorkspace"
-EXTENSION_URL = "https://proworkspace.online/"
-PURCHASE_EXTENSION_URL = "https://proworkspace.online/purchase"
+Most stores lose revenue from slow replies and abandoned carts.
 
-# --- Search API (for cloud collection) ---
-SERPER_API_KEY = "107c448582a70725c7adce5f1ed9e6f59b5e1dc5"
+I built a simple AI system that:
+- auto-replies to customers
+- follows up abandoned carts
 
-# --- IMAP (for reply/bounce tracking) ---
-IMAP_HOST = "mail.brandivibe.com"
-IMAP_PORT = 993
-IMAP_EMAIL = SMTP_EMAIL
-IMAP_PASSWORD = SMTP_PASSWORD
+Worth showing a quick demo?
+
+Best,
+{sender_name}"""
+    },
+    "follow_up_1": {
+        "delay_days": 2,
+        "subject": "Re: Quick question about {store_name}",
+        "body": """Quick follow-up.
+
+This usually reduces 50-70% support workload and improves response speed.
+
+Want me to send a demo?
+
+{sender_name}"""
+    },
+    "follow_up_2": {
+        "delay_days": 5,
+        "subject": "Re: Quick question about {store_name}",
+        "body": """Should I close this, or are you open to seeing how this works?
+
+{sender_name}"""
+    }
+}

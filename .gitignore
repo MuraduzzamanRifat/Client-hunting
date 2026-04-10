@@ -1,5 +1,4 @@
 # Credentials — NEVER push
-config.py
 
 # Database
 *.db
