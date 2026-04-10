@@ -116,7 +116,7 @@ class ProxyManager:
         return len([p for p in self.proxies if self.failed.get(p["url"], 0) < self.max_fails])
 
 
-def make_request(url, proxy_manager=None, headers=None, timeout=15, max_retries=3, **kwargs):
+def make_request(url, proxy_manager=None, headers=None, cookies=None, timeout=15, max_retries=3, **kwargs):
     """
     Make an HTTP request with proxy rotation and auto-retry.
     Falls back to direct connection if no proxies or all fail.
@@ -139,6 +139,7 @@ def make_request(url, proxy_manager=None, headers=None, timeout=15, max_retries=
                 url,
                 headers=default_headers,
                 proxies=proxy,
+                cookies=cookies,
                 timeout=timeout,
                 **kwargs,
             )
@@ -175,7 +176,7 @@ def make_request(url, proxy_manager=None, headers=None, timeout=15, max_retries=
     # Final attempt without proxy
     if proxy_manager and proxy_manager.has_proxies():
         try:
-            resp = requests.get(url, headers=default_headers, timeout=timeout, **kwargs)
+            resp = requests.get(url, headers=default_headers, cookies=cookies, timeout=timeout, **kwargs)
             if resp.status_code == 200:
                 return resp
         except Exception:

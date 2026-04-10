@@ -1,0 +1,11 @@
+# Webshare proxies (10)
+31.59.20.176:6754:nmtvmgwx:ucle33abfsgu
+198.23.239.134:6540:nmtvmgwx:ucle33abfsgu
+45.38.107.97:6014:nmtvmgwx:ucle33abfsgu
+107.172.163.27:6543:nmtvmgwx:ucle33abfsgu
+198.105.121.200:6462:nmtvmgwx:ucle33abfsgu
+216.10.27.159:6837:nmtvmgwx:ucle33abfsgu
+142.111.67.146:5611:nmtvmgwx:ucle33abfsgu
+191.96.254.138:6185:nmtvmgwx:ucle33abfsgu
+31.58.9.4:6077:nmtvmgwx:ucle33abfsgu
+64.137.10.153:5803:nmtvmgwx:ucle33abfsgu
