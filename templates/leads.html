@@ -25,22 +25,30 @@
     <table class="table table-sm table-hover">
         <thead>
             <tr>
-                <th>ID</th><th>Domain</th><th>Store</th><th>Email</th>
-                <th>Niche</th><th>Status</th><th>First Line</th><th>Actions</th>
+                <th>ID</th><th>Business</th><th>Email</th><th>Phone</th>
+                <th>Website</th><th>Source</th><th>Status</th><th>Actions</th>
             </tr>
         </thead>
         <tbody>
         {% for lead in leads %}
             <tr>
                 <td class="text-muted">{{ lead.id }}</td>
-                <td><a href="https://{{ lead.domain }}" target="_blank" class="text-decoration-none">{{ lead.domain }}</a></td>
-                <td>{{ lead.store_name or '-' }}</td>
-                <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
-                <td><span class="badge bg-secondary">{{ lead.niche or '-' }}</span></td>
-                <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
-                <td class="text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                    {{ lead.first_line or '-' }}
+                <td>
+                    <strong>{{ lead.store_name or lead.domain }}</strong>
+                    {% if lead.address %}<br><small class="text-muted">{{ lead.address }}</small>{% endif %}
+                    {% if lead.rating %}<br><small class="text-warning">{{ lead.rating }} stars</small>{% endif %}
                 </td>
+                <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
+                <td>{{ lead.phone or '-' }}</td>
+                <td>
+                    {% if lead.website %}
+                        <a href="{{ lead.website }}" target="_blank" class="text-decoration-none">{{ lead.domain }}</a>
+                    {% else %}
+                        <span class="text-muted">{{ lead.domain or '-' }}</span>
+                    {% endif %}
+                </td>
+                <td><span class="badge bg-secondary">{{ lead.source or '-' }}</span></td>
+                <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         {% if lead.status != 'replied' %}

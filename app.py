@@ -106,6 +106,82 @@ def scrape_page():
 
 
 # ──────────────────────────────────────────────
+# GOOGLE MAPS SCRAPE
+# ──────────────────────────────────────────────
+@app.route("/maps", methods=["GET", "POST"])
+def maps_page():
+    if request.method == "POST":
+        query = request.form.get("query", "").strip()
+        location = request.form.get("location", "").strip()
+        max_results = int(request.form.get("max_results", 20))
+        if not query:
+            return render_template("maps.html", error="Search query is required")
+
+        job_id = f"maps_{datetime.now().strftime('%H%M%S')}"
+        _jobs[job_id] = {"status": "running", "query": query, "progress": 0, "total": 0, "added": 0, "log": []}
+
+        def _run():
+            try:
+                from scraper.maps_scraper import search_google_maps, extract_email_from_website
+                _jobs[job_id]["log"].append(f"Searching Google Maps: {query}")
+                if location:
+                    _jobs[job_id]["log"].append(f"Location: {location}")
+
+                businesses = search_google_maps(query, location=location, num_results=max_results)
+                _jobs[job_id]["total"] = len(businesses)
+                _jobs[job_id]["log"].append(f"Found {len(businesses)} businesses")
+
+                for i, biz in enumerate(businesses, 1):
+                    _jobs[job_id]["progress"] = i
+                    name = biz["title"]
+                    domain = biz["domain"]
+
+                    # Try to get email from website
+                    email = None
+                    if biz["website"]:
+                        _jobs[job_id]["log"].append(f"[{i}/{len(businesses)}] {name} — crawling {biz['website']}")
+                        try:
+                            email = extract_email_from_website(biz["website"])
+                        except Exception:
+                            pass
+
+                    # Use domain or title as unique key
+                    lead_domain = domain or name.lower().replace(" ", "-").replace(".", "")
+
+                    if db.add_lead(
+                        domain=lead_domain,
+                        store_name=name,
+                        email=email,
+                        niche=query,
+                        source="google_maps",
+                        phone=biz.get("phone"),
+                        address=biz.get("address"),
+                        rating=biz.get("rating"),
+                        website=biz.get("website"),
+                    ):
+                        _jobs[job_id]["added"] += 1
+                        status = f"[OK] {name}"
+                        if email:
+                            status += f" -> {email}"
+                        if biz["phone"]:
+                            status += f" | {biz['phone']}"
+                        _jobs[job_id]["log"].append(status)
+                    else:
+                        _jobs[job_id]["log"].append(f"[SKIP] {name} (already exists)")
+
+                _jobs[job_id]["status"] = "done"
+                _jobs[job_id]["log"].append(f"Done! Added {_jobs[job_id]['added']} new leads.")
+            except Exception as e:
+                _jobs[job_id]["status"] = "error"
+                _jobs[job_id]["log"].append(f"Error: {e}")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return redirect(url_for("job_status", job_id=job_id))
+
+    return render_template("maps.html")
+
+
+# ──────────────────────────────────────────────
 # PERSONALIZE
 # ──────────────────────────────────────────────
 @app.route("/personalize", methods=["POST"])

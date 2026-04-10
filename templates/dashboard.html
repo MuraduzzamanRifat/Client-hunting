@@ -57,22 +57,27 @@
 
 <!-- Quick Actions -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <a href="/scrape" class="btn btn-outline-success w-100 py-3">
-            <i class="bi bi-search"></i> Scrape New Leads
+    <div class="col-md-3">
+        <a href="/maps" class="btn btn-outline-success w-100 py-3">
+            <i class="bi bi-geo-alt"></i> Google Maps
         </a>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <a href="/scrape" class="btn btn-outline-secondary w-100 py-3">
+            <i class="bi bi-search"></i> Shopify Scrape
+        </a>
+    </div>
+    <div class="col-md-3">
         <form action="/personalize" method="POST" class="d-inline w-100">
             <input type="hidden" name="limit" value="50">
             <button class="btn btn-outline-info w-100 py-3">
-                <i class="bi bi-magic"></i> Personalize Leads
+                <i class="bi bi-magic"></i> Personalize
             </button>
         </form>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <a href="/send" class="btn btn-outline-primary w-100 py-3">
-            <i class="bi bi-send"></i> Send Sequence
+            <i class="bi bi-send"></i> Send
         </a>
     </div>
 </div>
@@ -82,20 +87,20 @@
 <div class="table-responsive">
     <table class="table table-sm">
         <thead>
-            <tr><th>Domain</th><th>Store</th><th>Email</th><th>Status</th><th>Added</th></tr>
+            <tr><th>Business</th><th>Email</th><th>Phone</th><th>Source</th><th>Status</th></tr>
         </thead>
         <tbody>
         {% for lead in leads %}
             <tr>
-                <td>{{ lead.domain }}</td>
-                <td>{{ lead.store_name or '-' }}</td>
+                <td>{{ lead.store_name or lead.domain }}</td>
                 <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
+                <td>{{ lead.phone or '-' }}</td>
+                <td><span class="badge bg-secondary">{{ lead.source or '-' }}</span></td>
                 <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
-                <td class="text-muted">{{ lead.created_at[:10] if lead.created_at else '' }}</td>
             </tr>
         {% endfor %}
         {% if not leads %}
-            <tr><td colspan="5" class="text-center text-muted py-4">No leads yet. Start by scraping!</td></tr>
+            <tr><td colspan="5" class="text-center text-muted py-4">No leads yet. Start with Google Maps!</td></tr>
         {% endif %}
         </tbody>
     </table>

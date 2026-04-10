@@ -23,6 +23,10 @@ def init_db():
             niche TEXT,
             source TEXT,
             first_line TEXT,
+            phone TEXT,
+            address TEXT,
+            rating TEXT,
+            website TEXT,
             status TEXT DEFAULT 'new',
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
@@ -58,12 +62,13 @@ def init_db():
 
 # --- Lead operations ---
 
-def add_lead(domain, store_name, email, niche, source):
+def add_lead(domain, store_name, email, niche, source, phone=None, address=None, rating=None, website=None):
     conn = get_conn()
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO leads (domain, store_name, email, niche, source) VALUES (?, ?, ?, ?, ?)",
-            (domain, store_name, email, niche, source)
+            """INSERT OR IGNORE INTO leads (domain, store_name, email, niche, source, phone, address, rating, website)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (domain, store_name, email, niche, source, phone, address, rating, website)
         )
         conn.commit()
         return True

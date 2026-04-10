@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Google Maps — ColdMail AI{% endblock %}
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-geo-alt"></i> Google Maps Lead Scraper</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Search Query</label>
+                    <input type="text" class="form-control" name="query" placeholder="e.g. digital marketing agency, real estate agency, restaurant" required>
+                    <div class="form-text">What type of business to find on Google Maps</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Location (optional)</label>
+                    <input type="text" class="form-control" name="location" placeholder="e.g. New York, London, Los Angeles">
+                    <div class="form-text">City or region to search in</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Max Results</label>
+                    <input type="number" class="form-control" name="max_results" value="20" min="5" max="100">
+                </div>
+                <button type="submit" class="btn btn-success w-100">
+                    <i class="bi bi-geo-alt"></i> Search Google Maps
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h6>What it does</h6>
+            <ul class="text-muted mb-0">
+                <li>Searches Google Maps for businesses matching your query</li>
+                <li>Extracts: <strong>name, phone, website, address, rating</strong></li>
+                <li>Crawls each website to find <strong>contact emails</strong></li>
+                <li>Checks contact page, about page, and footer</li>
+                <li>Saves everything to your lead database</li>
+            </ul>
+        </div>
+
+        <div class="stat-card mt-3">
+            <h6>Best Search Queries</h6>
+            <div class="row">
+                <div class="col-6">
+                    <ul class="text-muted small mb-0">
+                        <li>digital marketing agency</li>
+                        <li>real estate agency</li>
+                        <li>dental clinic</li>
+                        <li>law firm</li>
+                        <li>restaurant</li>
+                    </ul>
+                </div>
+                <div class="col-6">
+                    <ul class="text-muted small mb-0">
+                        <li>shopify store</li>
+                        <li>web design agency</li>
+                        <li>accounting firm</li>
+                        <li>gym fitness center</li>
+                        <li>auto repair shop</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card mt-3">
+            <h6>Smart Targeting Tips</h6>
+            <ul class="text-muted small mb-0">
+                <li><strong>Best leads:</strong> businesses with poor/no website</li>
+                <li><strong>Easy sell:</strong> no chatbot, no automation visible</li>
+                <li><strong>High conversion:</strong> businesses without any website</li>
+                <li>Always personalize: reference their actual business</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

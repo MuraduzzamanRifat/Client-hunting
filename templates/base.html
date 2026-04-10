@@ -36,8 +36,11 @@
             <a class="nav-link {% if request.endpoint == 'leads_page' %}active{% endif %}" href="/leads">
                 <i class="bi bi-people"></i> Leads
             </a>
+            <a class="nav-link {% if request.endpoint == 'maps_page' %}active{% endif %}" href="/maps">
+                <i class="bi bi-geo-alt"></i> Google Maps
+            </a>
             <a class="nav-link {% if request.endpoint == 'scrape_page' %}active{% endif %}" href="/scrape">
-                <i class="bi bi-search"></i> Scrape
+                <i class="bi bi-search"></i> Shopify Scrape
             </a>
             <a class="nav-link {% if request.endpoint == 'send_page' %}active{% endif %}" href="/send">
                 <i class="bi bi-send"></i> Send
