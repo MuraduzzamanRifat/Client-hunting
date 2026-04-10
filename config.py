@@ -39,8 +39,8 @@ SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 OUTSCRAPER_API_KEY = os.getenv("OUTSCRAPER_API_KEY", "")
 
-# AI
-AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")
+# AI (OpenAI takes priority if both set)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
