@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat — {{ store.store_name }}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; height: 100vh; display: flex; flex-direction: column; }
+
+.chat-header {
+    background: {{ store.primary_color }};
+    color: #fff;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.chat-header .dot { width: 10px; height: 10px; background: #4ade80; border-radius: 50%; }
+.chat-header h3 { font-size: 15px; font-weight: 600; }
+.chat-header small { font-size: 11px; opacity: 0.85; display: block; }
+.chat-close { margin-left: auto; background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; opacity: 0.7; }
+.chat-close:hover { opacity: 1; }
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #f8f9fa;
+}
+.msg {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+.msg-bot {
+    background: #fff;
+    color: #1a1a1a;
+    align-self: flex-start;
+    border: 1px solid #e5e7eb;
+    border-bottom-left-radius: 4px;
+}
+.msg-user {
+    background: {{ store.primary_color }};
+    color: #fff;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+.typing {
+    align-self: flex-start;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+    padding: 12px 18px;
+    display: none;
+}
+.typing span {
+    display: inline-block;
+    width: 7px; height: 7px;
+    background: #9ca3af;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: bounce 1.2s infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+}
+
+.chat-input {
+    padding: 12px 16px;
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid #e5e7eb;
+    background: #fff;
+    flex-shrink: 0;
+}
+.chat-input input {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 24px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+}
+.chat-input input:focus { border-color: {{ store.primary_color }}; }
+.chat-input button {
+    background: {{ store.primary_color }};
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.chat-input button:hover { opacity: 0.9; }
+
+.powered {
+    text-align: center;
+    font-size: 10px;
+    color: #9ca3af;
+    padding: 6px;
+    background: #fff;
+}
+</style>
+</head>
+<body>
+
+<div class="chat-header">
+    <span class="dot"></span>
+    <div>
+        <h3>{{ store.store_name }}</h3>
+        <small>Typically replies instantly</small>
+    </div>
+    <button class="chat-close" onclick="parent.postMessage('close-widget','*')">&times;</button>
+</div>
+
+<div class="chat-messages" id="messages">
+    <div class="msg msg-bot">{{ store.greeting }}</div>
+</div>
+
+<div class="typing" id="typing">
+    <span></span><span></span><span></span>
+</div>
+
+<div class="chat-input">
+    <input type="text" id="input" placeholder="Type a message..." autocomplete="off">
+    <button onclick="sendMessage()">&#10148;</button>
+</div>
+
+<div class="powered">Powered by AI</div>
+
+<script>
+const storeId = "{{ store_id }}";
+const chatApiUrl = "/chat/api";
+let conversationHistory = [];
+let cartRecoverySent = false;
+
+const messagesEl = document.getElementById('messages');
+const typingEl = document.getElementById('typing');
+const inputEl = document.getElementById('input');
+
+inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && inputEl.value.trim()) sendMessage();
+});
+
+function addMessage(text, isUser) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + (isUser ? 'msg-user' : 'msg-bot');
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.value = '';
+    addMessage(text, true);
+
+    typingEl.style.display = 'block';
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    try {
+        const resp = await fetch(chatApiUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                store_id: storeId,
+                messages: conversationHistory,
+                message: text
+            })
+        });
+        const data = await resp.json();
+
+        conversationHistory.push({role: 'user', content: text});
+        conversationHistory.push({role: 'assistant', content: data.reply});
+
+        typingEl.style.display = 'none';
+        addMessage(data.reply, false);
+    } catch (err) {
+        typingEl.style.display = 'none';
+        addMessage("Sorry, something went wrong. Please try again.", false);
+    }
+}
+
+// Cart recovery: after 15s idle, show proactive message
+setTimeout(function() {
+    if (!cartRecoverySent && conversationHistory.length === 0) {
+        cartRecoverySent = true;
+        addMessage("{{ store.cart_recovery_msg }}", false);
+    }
+}, 15000);
+</script>
+</body>
+</html>

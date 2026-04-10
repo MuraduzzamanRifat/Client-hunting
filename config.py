@@ -61,41 +61,40 @@ SEARCH_QUERIES = [
 # Email sequences
 EMAIL_SEQUENCES = {
     "subject_options": [
-        "Quick fix for your store",
-        "Reduce support load?",
-        "Saw your {store_name} store",
+        "Quick fix for {store_name}",
+        "Idea for {store_name}",
+        "You're likely losing sales from this",
     ],
     "email_1": {
         "delay_days": 0,
-        "subject": "Quick question about {store_name}",
+        "subject": "Idea for {store_name}",
         "body": """{first_line}
 
-Most stores lose revenue from slow replies and abandoned carts.
+Most stores lose conversions when customers don't get fast answers to pre-sale questions (shipping, sizing, returns).
 
-I built a simple AI system that:
-- auto-replies to customers
-- follows up abandoned carts
+I help Shopify brands automate these interactions so customers get answers instantly and buy faster.
 
-Worth showing a quick demo?
+Happy to show a quick example tailored to your store — no setup needed on your side.
 
-Best,
 {sender_name}"""
     },
     "follow_up_1": {
         "delay_days": 2,
-        "subject": "Re: Quick question about {store_name}",
+        "subject": "Re: Idea for {store_name}",
         "body": """Quick follow-up.
 
-This usually reduces 50-70% support workload and improves response speed.
+I mapped out how {store_name} could automatically handle 60-80% of incoming support questions (order status, returns, FAQs).
 
-Want me to send a demo?
+This usually reduces workload and speeds up replies immediately.
+
+Want me to send it over?
 
 {sender_name}"""
     },
     "follow_up_2": {
         "delay_days": 5,
-        "subject": "Re: Quick question about {store_name}",
-        "body": """Should I close this, or are you open to seeing how this works?
+        "subject": "Re: Idea for {store_name}",
+        "body": """Should I close this out, or are you open to seeing how this would work for {store_name}?
 
 {sender_name}"""
     }

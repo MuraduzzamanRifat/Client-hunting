@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Setup Store — ColdMail AI{% endblock %}
+{% block content %}
+<h4 class="mb-4">Create Store Demo</h4>
+<p class="text-muted mb-4">Fill in a prospect's store details to generate a custom chatbot demo in seconds.</p>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="stat-card">
+            <form method="POST" id="setupForm">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Store Name</label>
+                        <input type="text" class="form-control" name="store_name" placeholder="e.g. Glow Skincare Co" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Store ID (URL slug)</label>
+                        <input type="text" class="form-control" name="store_id" placeholder="e.g. glow-skincare" required>
+                        <div class="form-text">Used in demo URL: /demo?store=glow-skincare</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Niche</label>
+                        <input type="text" class="form-control" name="niche" placeholder="e.g. skincare, fashion, pet supplies">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Support Email</label>
+                        <input type="email" class="form-control" name="support_email" placeholder="e.g. support@store.com">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Products (one per line: name | price | description)</label>
+                        <textarea class="form-control" name="products" rows="5" placeholder="Vitamin C Serum | 29.99 | Brightening serum with 20% vitamin C
+Hydrating Moisturizer | 34.99 | Lightweight daily moisturizer for all skin types
+Retinol Night Cream | 44.99 | Anti-aging cream with 0.5% retinol"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Return Policy</label>
+                        <textarea class="form-control" name="return_policy" rows="2" placeholder="30-day returns. Email support to start the process."></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Shipping Countries</label>
+                        <input type="text" class="form-control" name="shipping_countries" placeholder="US, Canada, UK" value="US, Canada, UK">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Shipping Time</label>
+                        <input type="text" class="form-control" name="shipping_time" placeholder="3-7 business days" value="3-7 business days">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Brand Color</label>
+                        <input type="color" class="form-control form-control-color" name="primary_color" value="#2D7D46">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Free Shipping Over ($)</label>
+                        <input type="number" class="form-control" name="free_shipping_over" value="50">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success w-100 mt-4 py-2">
+                    Create Demo
+                </button>
+            </form>
+        </div>
+
+        {% if created_store_id %}
+        <div class="alert alert-success mt-3">
+            <strong>Demo created!</strong><br>
+            <a href="/demo?store={{ created_store_id }}" target="_blank" class="text-decoration-none">
+                {{ request.host_url }}demo?store={{ created_store_id }}
+            </a>
+            <br><small class="text-muted">Send this link to your prospect</small>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="stat-card">
+            <h6>How to use</h6>
+            <ol class="text-muted small">
+                <li class="mb-2">Find a Shopify store you want to pitch</li>
+                <li class="mb-2">Copy their store name, products, and policies from their site</li>
+                <li class="mb-2">Paste them here</li>
+                <li class="mb-2">Click "Create Demo"</li>
+                <li class="mb-2">Send the demo link in your cold email</li>
+            </ol>
+        </div>
+
+        <div class="stat-card mt-3">
+            <h6>Existing Demos</h6>
+            {% for sid, cfg in stores.items() %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <a href="/demo?store={{ sid }}" target="_blank" class="text-decoration-none">{{ cfg.store_name }}</a>
+                <span class="badge bg-secondary">{{ sid }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

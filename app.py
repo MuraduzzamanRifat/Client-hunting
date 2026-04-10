@@ -436,6 +436,84 @@ def delete_lead(lead_id):
     return redirect(url_for("leads_page"))
 
 
+# ──────────────────────────────────────────────
+# CHATBOT DEMO ROUTES
+# ──────────────────────────────────────────────
+@app.route("/demo")
+def demo_page():
+    store_id = request.args.get("store", "demo")
+    from chatbot.store_configs import get_store_config
+    config = get_store_config(store_id)
+    return render_template("demo.html", store=config, store_id=store_id)
+
+
+@app.route("/widget")
+def widget_page():
+    store_id = request.args.get("store", "demo")
+    from chatbot.store_configs import get_store_config
+    config = get_store_config(store_id)
+    return render_template("widget.html", store=config, store_id=store_id)
+
+
+@app.route("/chat/api", methods=["POST"])
+def chat_api():
+    data = request.get_json()
+    store_id = data.get("store_id", "demo")
+    messages = data.get("messages", [])
+    user_msg = data.get("message", "")
+    if not user_msg:
+        return jsonify({"reply": "Could you say that again?"})
+    from chatbot.engine import chat
+    reply = chat(store_id, messages, user_msg)
+    return jsonify({"reply": reply})
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup_page():
+    from chatbot.store_configs import STORE_CONFIGS
+    created_store_id = None
+
+    if request.method == "POST":
+        store_id = request.form.get("store_id", "").strip().lower().replace(" ", "-")
+        store_name = request.form.get("store_name", "").strip()
+
+        # Parse products
+        products = []
+        for line in request.form.get("products", "").strip().split("\n"):
+            line = line.strip()
+            if "|" in line:
+                parts = line.split("|")
+                products.append({
+                    "name": parts[0].strip(),
+                    "price": float(parts[1].strip()) if len(parts) > 1 else 0,
+                    "desc": parts[2].strip() if len(parts) > 2 else "",
+                    "category": "general",
+                })
+
+        shipping_countries = [c.strip() for c in request.form.get("shipping_countries", "US").split(",")]
+
+        STORE_CONFIGS[store_id] = {
+            "store_name": store_name,
+            "tagline": f"{request.form.get('niche', '')} store",
+            "niche": request.form.get("niche", "ecommerce"),
+            "currency": "USD",
+            "shipping_countries": shipping_countries,
+            "shipping_time": request.form.get("shipping_time", "3-7 business days"),
+            "free_shipping_over": int(request.form.get("free_shipping_over", 50)),
+            "return_policy": request.form.get("return_policy", "30-day returns."),
+            "support_email": request.form.get("support_email", f"support@{store_id}.com"),
+            "support_hours": "Mon-Fri 9am-6pm EST",
+            "products": products or [{"name": "Sample Product", "price": 29.99, "desc": "A great product", "category": "general"}],
+            "brand_tone": "friendly, helpful, professional",
+            "primary_color": request.form.get("primary_color", "#2D7D46"),
+            "greeting": f"Hi! I'm the {store_name} assistant. How can I help you today?",
+            "cart_recovery_msg": "I noticed you were browsing! Need help finding something or have any questions?",
+        }
+        created_store_id = store_id
+
+    return render_template("setup.html", stores=STORE_CONFIGS, created_store_id=created_store_id)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("DEBUG", "false").lower() == "true")

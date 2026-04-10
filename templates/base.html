@@ -48,6 +48,13 @@
             <a class="nav-link" href="/export?format=csv">
                 <i class="bi bi-download"></i> Export CSV
             </a>
+            <hr style="border-color:#30363d; margin:8px 16px;">
+            <a class="nav-link {% if request.endpoint == 'setup_page' %}active{% endif %}" href="/setup">
+                <i class="bi bi-gear"></i> Setup Demo
+            </a>
+            <a class="nav-link" href="/demo" target="_blank">
+                <i class="bi bi-chat-dots"></i> Live Demo
+            </a>
         </nav>
         <div class="mt-auto p-3" style="color:#484f58; font-size:.75rem;">
             ColdMail AI v1.0

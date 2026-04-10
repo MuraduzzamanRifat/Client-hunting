@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Support Demo — {{ store.store_name }}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+
+.container { max-width: 800px; margin: 0 auto; padding: 60px 24px; }
+
+h1 { font-size: 2rem; color: #f0f6fc; margin-bottom: 8px; }
+.subtitle { color: #8b949e; font-size: 1.1rem; margin-bottom: 48px; }
+
+.demo-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+}
+.demo-card h3 { color: #f0f6fc; margin-bottom: 12px; font-size: 1.1rem; }
+.demo-card p { color: #8b949e; line-height: 1.7; }
+
+.try-section {
+    background: #161b22;
+    border: 1px solid {{ store.primary_color }};
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+    text-align: center;
+}
+.try-section h2 { color: #f0f6fc; margin-bottom: 12px; }
+.try-section p { color: #8b949e; margin-bottom: 20px; }
+.try-section .arrow { font-size: 2rem; color: {{ store.primary_color }}; animation: bounce-arrow 1.5s infinite; }
+@keyframes bounce-arrow {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(8px); }
+}
+
+.questions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 32px;
+}
+.q-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px;
+    cursor: default;
+}
+.q-card strong { color: #f0f6fc; font-size: 0.85rem; display: block; margin-bottom: 4px; }
+.q-card span { color: #8b949e; font-size: 0.8rem; }
+
+.embed-section {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+}
+.embed-section h3 { color: #f0f6fc; margin-bottom: 12px; }
+.embed-code {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #7ee787;
+    overflow-x: auto;
+    word-break: break-all;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.stat {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+}
+.stat h2 { font-size: 2rem; color: {{ store.primary_color }}; }
+.stat small { color: #8b949e; }
+
+footer { text-align: center; color: #484f58; font-size: 0.8rem; padding: 32px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>AI Support Assistant</h1>
+    <p class="subtitle">Live demo for {{ store.store_name }}</p>
+
+    <div class="stats">
+        <div class="stat">
+            <h2>&lt;3s</h2>
+            <small>Response time</small>
+        </div>
+        <div class="stat">
+            <h2>24/7</h2>
+            <small>Always online</small>
+        </div>
+        <div class="stat">
+            <h2>60-80%</h2>
+            <small>Queries handled automatically</small>
+        </div>
+    </div>
+
+    <div class="try-section">
+        <h2>Try it live</h2>
+        <p>Click the chat button in the bottom-right corner and ask anything.</p>
+        <div class="arrow">&#8595;</div>
+    </div>
+
+    <div class="demo-card">
+        <h3>What it handles</h3>
+        <div class="questions">
+            <div class="q-card">
+                <strong>Order tracking</strong>
+                <span>"Where's my order #1234?"</span>
+            </div>
+            <div class="q-card">
+                <strong>Returns</strong>
+                <span>"How do I return this item?"</span>
+            </div>
+            <div class="q-card">
+                <strong>Shipping</strong>
+                <span>"Do you ship to Germany?"</span>
+            </div>
+            <div class="q-card">
+                <strong>Product questions</strong>
+                <span>"What dog beds do you have?"</span>
+            </div>
+            <div class="q-card">
+                <strong>Cart recovery</strong>
+                <span>Proactive follow-up on idle visitors</span>
+            </div>
+            <div class="q-card">
+                <strong>FAQ</strong>
+                <span>"What's your return policy?"</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="embed-section">
+        <h3>Installation — one line of code</h3>
+        <div class="embed-code">
+            &lt;script src="{{ request.host_url }}static/widget.js" data-store="{{ store_id }}"&gt;&lt;/script&gt;
+        </div>
+    </div>
+</div>
+
+<footer>AI Support Assistant Demo</footer>
+
+<!-- Load the actual widget -->
+<script src="/static/widget.js" data-store="{{ store_id }}"></script>
+</body>
+</html>
