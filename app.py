@@ -212,6 +212,15 @@ def maps_page():
 
                         _jobs[job_id]["added"] += 1
 
+                        # Auto-create chatbot demo if store has a website
+                        demo_id = None
+                        if biz.get("website"):
+                            try:
+                                from chatbot.auto_demo import auto_create_demo
+                                demo_id = auto_create_demo(name, lead_domain, biz["website"])
+                            except Exception:
+                                pass
+
                         # Build status line
                         tags = []
                         if email:
@@ -223,6 +232,8 @@ def maps_page():
                         if audit.get("score", 50) < 30:
                             tags.append("HOT LEAD")
                             qualified += 1
+                        if demo_id:
+                            tags.append(f"demo: /demo?store={demo_id}")
 
                         _jobs[job_id]["log"].append(f"[OK] {name} | {' | '.join(tags)}")
                     else:

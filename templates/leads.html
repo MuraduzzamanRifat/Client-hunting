@@ -64,6 +64,9 @@
                 <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
+                        {% if lead.website %}
+                        <a href="/demo?store={{ lead.domain|replace('.', '-') }}" target="_blank" class="btn btn-outline-success btn-sm" title="Demo"><i class="bi bi-chat-dots"></i></a>
+                        {% endif %}
                         {% if lead.status != 'replied' %}
                         <form action="/reply/{{ lead.id }}" method="POST" class="d-inline">
                             <input type="hidden" name="notes" value="">
