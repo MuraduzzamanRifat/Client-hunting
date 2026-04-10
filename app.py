@@ -9,6 +9,7 @@ import csv
 import json
 import io
 import threading
+import traceback
 from datetime import datetime
 
 if sys.platform == "win32":
@@ -17,13 +18,14 @@ if sys.platform == "win32":
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 
 import db
-from scraper.google_scraper import search_shopify_stores
-from scraper.email_extractor import extract_store_info
-from personalizer.generator import generate_first_lines
-from sender.sequence import run_sequence
 
 app = Flask(__name__)
 db.init_db()
+
+
+@app.route("/health")
+def health():
+    return "ok"
 
 # Track background jobs
 _jobs = {}
@@ -71,6 +73,8 @@ def scrape_page():
 
         def _run():
             try:
+                from scraper.google_scraper import search_shopify_stores
+                from scraper.email_extractor import extract_store_info
                 _jobs[job_id]["log"].append(f"Searching for Shopify stores in: {niche}")
                 domains = search_shopify_stores(niche, max_results=max_results)
                 _jobs[job_id]["total"] = len(domains)
@@ -113,6 +117,7 @@ def personalize_action():
     if not needs:
         return jsonify({"status": "ok", "message": "No leads need personalization", "updated": 0})
 
+    from personalizer.generator import generate_first_lines
     results = generate_first_lines(needs)
     updated = 0
     for lead in needs:
@@ -138,6 +143,7 @@ def send_page():
 
         def _run():
             try:
+                from sender.sequence import run_sequence
                 total = run_sequence(sender_name=sender_name, dry_run=dry_run)
                 _jobs[job_id]["sent"] = total
                 _jobs[job_id]["status"] = "done"
