@@ -62,10 +62,19 @@ class EmailSender:
         msg.attach(MIMEText(body, "plain"))
 
         try:
-            with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as server:
+            host = inbox.get("host", config.SMTP_HOST)
+            port = inbox.get("port", config.SMTP_PORT)
+            use_ssl = inbox.get("ssl", config.SMTP_USE_SSL)
+
+            if use_ssl or port == 465:
+                server = smtplib.SMTP_SSL(host, port, timeout=30)
+            else:
+                server = smtplib.SMTP(host, port, timeout=30)
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
+
+            with server:
                 server.login(from_email, inbox["password"])
                 server.sendmail(from_email, to_email, msg.as_string())
 

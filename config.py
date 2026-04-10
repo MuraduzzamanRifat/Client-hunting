@@ -4,25 +4,33 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# SMTP
+# SMTP defaults (used when inbox doesn't specify its own)
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
 
-# Multiple inboxes: "email:pass,email2:pass2"
+# Multiple inboxes with per-inbox SMTP support
+# Format: email|password|host|port|ssl,email2|password2|host2|port2|ssl
+# Short format also works: email|password (uses default SMTP_HOST/PORT)
 def get_sender_inboxes():
     raw = os.getenv("SENDER_INBOXES", "")
     if not raw:
-        if SMTP_USER and SMTP_PASS:
-            return [{"email": SMTP_USER, "password": SMTP_PASS}]
         return []
     inboxes = []
-    for pair in raw.split(","):
-        pair = pair.strip()
-        if ":" in pair:
-            email, password = pair.split(":", 1)
-            inboxes.append({"email": email.strip(), "password": password.strip()})
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split("|")
+        if len(parts) >= 2:
+            inbox = {
+                "email": parts[0].strip(),
+                "password": parts[1].strip(),
+                "host": parts[2].strip() if len(parts) > 2 else SMTP_HOST,
+                "port": int(parts[3].strip()) if len(parts) > 3 else SMTP_PORT,
+                "ssl": parts[4].strip().lower() == "true" if len(parts) > 4 else SMTP_USE_SSL,
+            }
+            inboxes.append(inbox)
     return inboxes
 
 
