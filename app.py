@@ -138,17 +138,20 @@ def maps_page():
                     name = biz["title"]
                     domain = biz["domain"]
 
-                    email = None
+                    # Use email from Outscraper if available, otherwise crawl
+                    email = biz.get("email") or None
                     audit = {"score": 0, "has_chatbot": False, "has_automation": False,
                              "load_time": None, "personal_line": ""}
 
                     if biz["website"]:
-                        _jobs[job_id]["log"].append(f"[{i}/{len(businesses)}] {name} — auditing + crawling")
+                        action = "auditing"
+                        if not email:
+                            action = "auditing + crawling for email"
+                        _jobs[job_id]["log"].append(f"[{i}/{len(businesses)}] {name} — {action}")
                         try:
-                            # Audit website (checks chatbot, speed, automation)
                             audit = audit_website(biz["website"])
-                            # Extract email
-                            email = extract_email_from_website(biz["website"])
+                            if not email:
+                                email = extract_email_from_website(biz["website"])
                         except Exception:
                             pass
                     else:

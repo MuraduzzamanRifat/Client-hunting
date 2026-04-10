@@ -37,6 +37,7 @@ def get_sender_inboxes():
 # Search APIs
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+OUTSCRAPER_API_KEY = os.getenv("OUTSCRAPER_API_KEY", "")
 
 # AI
 AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")

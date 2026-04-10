@@ -1,7 +1,7 @@
 """
-Google Maps business lead scraper via Serper.dev API.
-Searches for businesses, extracts name, phone, website, address, rating.
-Then crawls websites to find contact emails.
+Google Maps business lead scraper.
+Primary: Outscraper API (high volume, includes emails)
+Fallback: Serper API
 """
 
 import re
@@ -24,13 +24,97 @@ JUNK_DOMAINS = {'example.com', 'sentry.io', 'wixpress.com', 'w3.org',
 
 def search_google_maps(query, location="", num_results=20):
     """
-    Search Google Maps via Serper API.
-    Returns list of business dicts with: title, address, phone, website, rating, domain.
+    Search Google Maps. Uses Outscraper if available, falls back to Serper.
+    Returns list of business dicts.
     """
-    api_key = config.SERPER_API_KEY
-    if not api_key:
-        raise ValueError("SERPER_API_KEY not set. Add it to environment variables.")
+    if config.OUTSCRAPER_API_KEY:
+        return _outscraper_search(query, location, num_results)
+    elif config.SERPER_API_KEY:
+        return _serper_search(query, location, num_results)
+    else:
+        raise ValueError("No Maps API key set. Add OUTSCRAPER_API_KEY to environment variables.")
 
+
+# ──────────────────────────────────────────────
+# OUTSCRAPER API
+# ──────────────────────────────────────────────
+def _outscraper_search(query, location="", num_results=20):
+    """
+    Outscraper Google Maps API.
+    Docs: https://app.outscraper.com/api-docs#tag/Google-Maps
+    Returns up to 500 results per query. Includes emails directly.
+    """
+    api_key = config.OUTSCRAPER_API_KEY
+    search_query = f"{query}, {location}" if location else query
+
+    try:
+        resp = requests.get(
+            "https://api.app.outscraper.com/maps/search-v3",
+            params={
+                "query": search_query,
+                "limit": min(num_results, 500),
+                "async": "false",
+                "language": "en",
+                "region": "us",
+            },
+            headers={"X-API-KEY": api_key},
+            timeout=120,  # Outscraper can take time for large queries
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        raise Exception(f"Outscraper API error: {e}")
+
+    results = []
+    # Outscraper returns nested array: data[0] = list of places
+    places = []
+    if isinstance(data.get("data"), list) and len(data["data"]) > 0:
+        places = data["data"][0] if isinstance(data["data"][0], list) else data["data"]
+
+    for place in places:
+        if not isinstance(place, dict):
+            continue
+
+        biz = {
+            "title": place.get("name", ""),
+            "address": place.get("full_address", "") or place.get("address", ""),
+            "phone": place.get("phone", "") or place.get("international_phone", ""),
+            "website": place.get("site", "") or place.get("website", ""),
+            "rating": str(place.get("rating", "")),
+            "reviews": place.get("reviews", 0),
+            "category": place.get("category", "") or place.get("type", ""),
+            "email": place.get("email", ""),  # Outscraper can return emails directly!
+            "description": place.get("description", ""),
+        }
+
+        # Extract domain from website
+        if biz["website"]:
+            try:
+                parsed = urlparse(biz["website"])
+                biz["domain"] = re.sub(r'^www\.', '', parsed.netloc.lower())
+            except Exception:
+                biz["domain"] = ""
+        else:
+            biz["domain"] = ""
+
+        # Handle email from Outscraper (can be string or list)
+        email_raw = place.get("email")
+        if isinstance(email_raw, list) and email_raw:
+            biz["email"] = email_raw[0]
+        elif isinstance(email_raw, str):
+            biz["email"] = email_raw
+
+        results.append(biz)
+
+    return results
+
+
+# ──────────────────────────────────────────────
+# SERPER API (fallback)
+# ──────────────────────────────────────────────
+def _serper_search(query, location="", num_results=20):
+    """Serper.dev Google Maps API (fallback)."""
+    api_key = config.SERPER_API_KEY
     results = []
     page = 1
     collected = 0
@@ -71,10 +155,9 @@ def search_google_maps(query, location="", num_results=20):
                 "rating": str(place.get("rating", "")),
                 "reviews": place.get("reviewsCount", 0),
                 "category": place.get("category", ""),
-                "cid": place.get("cid", ""),
+                "email": "",
             }
 
-            # Extract domain from website
             if biz["website"]:
                 try:
                     parsed = urlparse(biz["website"])
@@ -96,19 +179,20 @@ def search_google_maps(query, location="", num_results=20):
     return results
 
 
+# ──────────────────────────────────────────────
+# EMAIL EXTRACTION (website crawling)
+# ──────────────────────────────────────────────
 def extract_email_from_website(url, timeout=10):
     """Crawl a business website to find contact email."""
     if not url:
         return None
 
-    # Ensure URL has scheme
     if not url.startswith("http"):
         url = "https://" + url
 
     emails = set()
     pages_to_check = [url]
 
-    # Also check common contact pages
     try:
         parsed = urlparse(url)
         base = f"{parsed.scheme}://{parsed.netloc}"
@@ -123,7 +207,6 @@ def extract_email_from_website(url, timeout=10):
             if resp.status_code != 200:
                 continue
 
-            # Find emails in page text
             found = EMAIL_RE.findall(resp.text)
             for email in found:
                 email = email.lower()
@@ -131,7 +214,6 @@ def extract_email_from_website(url, timeout=10):
                 if domain not in JUNK_DOMAINS and not email.endswith(('.png', '.jpg', '.gif', '.svg', '.css', '.js')):
                     emails.add(email)
 
-            # Check mailto links
             soup = BeautifulSoup(resp.text, "html.parser")
             for a in soup.find_all("a", href=True):
                 if a["href"].startswith("mailto:"):
