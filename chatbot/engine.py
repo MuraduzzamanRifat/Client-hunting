@@ -49,19 +49,12 @@ RULES:
 def chat(store_id, messages, user_message):
     """
     Process a chat message and return the assistant's reply.
-
-    Args:
-        store_id: Store config key
-        messages: Previous conversation messages [{"role": "user/assistant", "content": "..."}]
-        user_message: New user message
-
-    Returns:
-        Assistant reply string
+    Uses OpenAI if OPENAI_API_KEY is set, otherwise Anthropic.
     """
-    import anthropic
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
+    if not openai_key and not anthropic_key:
         return "Support chat is currently being set up. Please email us directly for help!"
 
     config = get_store_config(store_id)
@@ -71,18 +64,49 @@ def chat(store_id, messages, user_message):
     recent = messages[-6:] if len(messages) > 6 else list(messages)
     recent.append({"role": "user", "content": user_message})
 
+    if openai_key:
+        return _chat_openai(openai_key, system_prompt, recent, config)
+    else:
+        return _chat_anthropic(anthropic_key, system_prompt, recent, config)
+
+
+def _chat_openai(api_key, system_prompt, messages, config):
+    """Chat via OpenAI API (GPT-4o-mini — cheapest, fast)."""
     try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        oai_messages = [{"role": "system", "content": system_prompt}] + messages
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=300,
+            messages=oai_messages,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        err = str(e).lower()
+        if "auth" in err or "api key" in err:
+            return "Support chat is being configured. Please email us at " + config["support_email"]
+        if "rate" in err:
+            return "We're experiencing high volume. Please try again in a moment or email " + config["support_email"]
+        return "Something went wrong. Please email us at " + config["support_email"]
+
+
+def _chat_anthropic(api_key, system_prompt, messages, config):
+    """Chat via Anthropic API (Claude Haiku — cheapest, fast)."""
+    try:
+        import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
             system=system_prompt,
-            messages=recent,
+            messages=messages,
         )
         return response.content[0].text
-    except anthropic.AuthenticationError:
-        return "Support chat is being configured. Please email us at " + config["support_email"]
-    except anthropic.RateLimitError:
-        return "We're experiencing high volume right now. Please try again in a moment or email " + config["support_email"]
-    except Exception:
-        return "Something went wrong. Please email us at " + config["support_email"] + " and we'll help you right away."
+    except Exception as e:
+        err = str(e).lower()
+        if "auth" in err:
+            return "Support chat is being configured. Please email us at " + config["support_email"]
+        if "rate" in err:
+            return "We're experiencing high volume. Please try again in a moment or email " + config["support_email"]
+        return "Something went wrong. Please email us at " + config["support_email"]
