@@ -69,7 +69,57 @@ def search_maps_direct(query, location="", num_results=20, proxy_manager=None):
             seen.add(key)
             unique.append(biz)
 
-    return unique[:num_results]
+    final = unique[:num_results]
+
+    # Enrich: find websites for businesses that don't have one
+    for biz in final:
+        if not biz.get("website") and biz.get("title"):
+            _rate_limit()
+            site = _find_website(biz["title"], proxy_manager)
+            if site:
+                biz["website"] = site
+                try:
+                    parsed = urllib.parse.urlparse(site)
+                    biz["domain"] = re.sub(r'^www\.', '', parsed.netloc.lower())
+                except Exception:
+                    pass
+
+    return final
+
+
+def _find_website(business_name, proxy_manager):
+    """Google a business name to find their website URL."""
+    query = urllib.parse.quote_plus(f"{business_name} official website")
+    url = f"https://www.google.com/search?q={query}&num=3&hl=en&gl=us"
+    cookies = {"CONSENT": "PENDING+987", "SOCS": "CAISHAgBEhJnd3NfMjAyMzA4MTAtMF9SQzIaAmVuIAEaBgiA_LSmBg"}
+
+    resp = make_request(url, proxy_manager=proxy_manager, cookies=cookies)
+    if not resp:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    skip_domains = {'google.com', 'youtube.com', 'facebook.com', 'twitter.com',
+                    'instagram.com', 'linkedin.com', 'yelp.com', 'bbb.org',
+                    'yellowpages.com', 'mapquest.com', 'tripadvisor.com',
+                    'pinterest.com', 'tiktok.com', 'reddit.com', 'wikipedia.org',
+                    'crunchbase.com', 'glassdoor.com', 'indeed.com'}
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if href.startswith("/url?q="):
+            href = href.split("/url?q=")[1].split("&")[0]
+            href = urllib.parse.unquote(href)
+        if href.startswith("http") and "google" not in href:
+            try:
+                parsed = urllib.parse.urlparse(href)
+                domain = parsed.netloc.lower().replace("www.", "")
+                if domain not in skip_domains and "." in domain:
+                    return href
+            except Exception:
+                continue
+
+    return None
 
 
 def _scrape_google_local_pack(query, num_results, proxy_manager):
