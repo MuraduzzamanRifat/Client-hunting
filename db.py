@@ -27,6 +27,10 @@ def init_db():
             address TEXT,
             rating TEXT,
             website TEXT,
+            score INTEGER DEFAULT 0,
+            has_chatbot INTEGER DEFAULT 0,
+            has_automation INTEGER DEFAULT 0,
+            load_time REAL,
             status TEXT DEFAULT 'new',
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
@@ -56,19 +60,39 @@ def init_db():
             notes TEXT
         );
     """)
+    # Migrate: add new columns if they don't exist
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(leads)").fetchall()}
+    migrations = {
+        "phone": "TEXT",
+        "address": "TEXT",
+        "rating": "TEXT",
+        "website": "TEXT",
+        "score": "INTEGER DEFAULT 0",
+        "has_chatbot": "INTEGER DEFAULT 0",
+        "has_automation": "INTEGER DEFAULT 0",
+        "load_time": "REAL",
+    }
+    for col, col_type in migrations.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {col_type}")
+
     conn.commit()
     conn.close()
 
 
 # --- Lead operations ---
 
-def add_lead(domain, store_name, email, niche, source, phone=None, address=None, rating=None, website=None):
+def add_lead(domain, store_name, email, niche, source, phone=None, address=None,
+             rating=None, website=None, score=0, has_chatbot=0, has_automation=0, load_time=None):
     conn = get_conn()
     try:
         conn.execute(
-            """INSERT OR IGNORE INTO leads (domain, store_name, email, niche, source, phone, address, rating, website)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (domain, store_name, email, niche, source, phone, address, rating, website)
+            """INSERT OR IGNORE INTO leads
+               (domain, store_name, email, niche, source, phone, address, rating, website,
+                score, has_chatbot, has_automation, load_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (domain, store_name, email, niche, source, phone, address, rating, website,
+             score, has_chatbot, has_automation, load_time)
         )
         conn.commit()
         return True
@@ -188,6 +212,23 @@ def get_stats():
         "SELECT COUNT(*) as c FROM send_log WHERE sent_at LIKE ?",
         (datetime.now().strftime("%Y-%m-%d") + "%",)
     ).fetchone()["c"]
+
+    # Qualified = has email + score < 40 (no chatbot, no automation = easy sell)
+    stats["qualified"] = conn.execute(
+        "SELECT COUNT(*) as c FROM leads WHERE email IS NOT NULL AND email != '' AND score < 40"
+    ).fetchone()["c"]
+
+    stats["no_chatbot"] = conn.execute(
+        "SELECT COUNT(*) as c FROM leads WHERE has_chatbot = 0 AND website IS NOT NULL AND website != ''"
+    ).fetchone()["c"]
+
+    stats["no_website"] = conn.execute(
+        "SELECT COUNT(*) as c FROM leads WHERE (website IS NULL OR website = '')"
+    ).fetchone()["c"]
+
+    # By source
+    sources = conn.execute("SELECT source, COUNT(*) as c FROM leads GROUP BY source").fetchall()
+    stats["by_source"] = {r["source"]: r["c"] for r in sources}
 
     steps = conn.execute("""
         SELECT step, COUNT(*) as c FROM sequence_state GROUP BY step

@@ -26,7 +26,7 @@
         <thead>
             <tr>
                 <th>ID</th><th>Business</th><th>Email</th><th>Phone</th>
-                <th>Website</th><th>Source</th><th>Status</th><th>Actions</th>
+                <th>Website</th><th>Score</th><th>Status</th><th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -36,7 +36,7 @@
                 <td>
                     <strong>{{ lead.store_name or lead.domain }}</strong>
                     {% if lead.address %}<br><small class="text-muted">{{ lead.address }}</small>{% endif %}
-                    {% if lead.rating %}<br><small class="text-warning">{{ lead.rating }} stars</small>{% endif %}
+                    {% if lead.rating %}<small class="text-warning"> | {{ lead.rating }} stars</small>{% endif %}
                 </td>
                 <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
                 <td>{{ lead.phone or '-' }}</td>
@@ -44,10 +44,23 @@
                     {% if lead.website %}
                         <a href="{{ lead.website }}" target="_blank" class="text-decoration-none">{{ lead.domain }}</a>
                     {% else %}
-                        <span class="text-muted">{{ lead.domain or '-' }}</span>
+                        <span style="color:#f85149;">No website</span>
                     {% endif %}
                 </td>
-                <td><span class="badge bg-secondary">{{ lead.source or '-' }}</span></td>
+                <td>
+                    {% if lead.score is not none %}
+                        {% if lead.score < 20 %}
+                            <span class="badge" style="background:#f85149;">HOT</span>
+                        {% elif lead.score < 40 %}
+                            <span class="badge" style="background:#f0883e;">WARM</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ lead.score }}</span>
+                        {% endif %}
+                        {% if lead.has_chatbot == 0 and lead.website %}
+                            <br><small class="text-warning">no chatbot</small>
+                        {% endif %}
+                    {% endif %}
+                </td>
                 <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">

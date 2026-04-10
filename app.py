@@ -123,6 +123,7 @@ def maps_page():
         def _run():
             try:
                 from scraper.maps_scraper import search_google_maps, extract_email_from_website
+                from scraper.website_auditor import audit_website
                 _jobs[job_id]["log"].append(f"Searching Google Maps: {query}")
                 if location:
                     _jobs[job_id]["log"].append(f"Location: {location}")
@@ -131,21 +132,29 @@ def maps_page():
                 _jobs[job_id]["total"] = len(businesses)
                 _jobs[job_id]["log"].append(f"Found {len(businesses)} businesses")
 
+                qualified = 0
                 for i, biz in enumerate(businesses, 1):
                     _jobs[job_id]["progress"] = i
                     name = biz["title"]
                     domain = biz["domain"]
 
-                    # Try to get email from website
                     email = None
+                    audit = {"score": 0, "has_chatbot": False, "has_automation": False,
+                             "load_time": None, "personal_line": ""}
+
                     if biz["website"]:
-                        _jobs[job_id]["log"].append(f"[{i}/{len(businesses)}] {name} — crawling {biz['website']}")
+                        _jobs[job_id]["log"].append(f"[{i}/{len(businesses)}] {name} — auditing + crawling")
                         try:
+                            # Audit website (checks chatbot, speed, automation)
+                            audit = audit_website(biz["website"])
+                            # Extract email
                             email = extract_email_from_website(biz["website"])
                         except Exception:
                             pass
+                    else:
+                        audit["personal_line"] = f"Noticed {name} doesn't have a website yet — huge opportunity."
+                        audit["score"] = 5  # No website = best lead
 
-                    # Use domain or title as unique key
                     lead_domain = domain or name.lower().replace(" ", "-").replace(".", "")
 
                     if db.add_lead(
@@ -158,18 +167,39 @@ def maps_page():
                         address=biz.get("address"),
                         rating=biz.get("rating"),
                         website=biz.get("website"),
+                        score=audit.get("score", 50),
+                        has_chatbot=1 if audit.get("has_chatbot") else 0,
+                        has_automation=1 if audit.get("has_automation") else 0,
+                        load_time=audit.get("load_time"),
                     ):
+                        # Auto-set personalization line from audit
+                        if audit.get("personal_line"):
+                            lead = db.get_conn().execute(
+                                "SELECT id FROM leads WHERE domain = ?", (lead_domain,)
+                            ).fetchone()
+                            if lead:
+                                db.update_lead(lead["id"], first_line=audit["personal_line"])
+
                         _jobs[job_id]["added"] += 1
-                        status = f"[OK] {name}"
+
+                        # Build status line
+                        tags = []
                         if email:
-                            status += f" -> {email}"
+                            tags.append(f"email: {email}")
                         if biz["phone"]:
-                            status += f" | {biz['phone']}"
-                        _jobs[job_id]["log"].append(status)
+                            tags.append(f"phone: {biz['phone']}")
+                        if not audit.get("has_chatbot") and biz["website"]:
+                            tags.append("NO CHATBOT")
+                        if audit.get("score", 50) < 30:
+                            tags.append("HOT LEAD")
+                            qualified += 1
+
+                        _jobs[job_id]["log"].append(f"[OK] {name} | {' | '.join(tags)}")
                     else:
                         _jobs[job_id]["log"].append(f"[SKIP] {name} (already exists)")
 
                 _jobs[job_id]["status"] = "done"
+                _jobs[job_id]["qualified"] = qualified
                 _jobs[job_id]["log"].append(f"Done! Added {_jobs[job_id]['added']} new leads.")
             except Exception as e:
                 _jobs[job_id]["status"] = "error"

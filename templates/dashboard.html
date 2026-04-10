@@ -3,33 +3,53 @@
 {% block content %}
 <h4 class="mb-4">Dashboard</h4>
 
+<!-- Funnel Stats -->
 <div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="stat-card">
-            <small>Total Leads</small>
+    <div class="col">
+        <div class="stat-card text-center">
+            <small>Scraped</small>
             <h3>{{ stats.total_leads }}</h3>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card">
+    <div class="col d-flex align-items-center justify-content-center" style="max-width:30px; color:#484f58;">
+        <i class="bi bi-chevron-right"></i>
+    </div>
+    <div class="col">
+        <div class="stat-card text-center">
             <small>With Email</small>
             <h3 class="text-success">{{ stats.with_email }}</h3>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card">
+    <div class="col d-flex align-items-center justify-content-center" style="max-width:30px; color:#484f58;">
+        <i class="bi bi-chevron-right"></i>
+    </div>
+    <div class="col">
+        <div class="stat-card text-center" style="border-color:#f0883e;">
+            <small>Qualified</small>
+            <h3 style="color:#f0883e;">{{ stats.qualified }}</h3>
+        </div>
+    </div>
+    <div class="col d-flex align-items-center justify-content-center" style="max-width:30px; color:#484f58;">
+        <i class="bi bi-chevron-right"></i>
+    </div>
+    <div class="col">
+        <div class="stat-card text-center">
             <small>Contacted</small>
             <h3 class="text-info">{{ stats.contacted }}</h3>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card">
+    <div class="col d-flex align-items-center justify-content-center" style="max-width:30px; color:#484f58;">
+        <i class="bi bi-chevron-right"></i>
+    </div>
+    <div class="col">
+        <div class="stat-card text-center" style="border-color:#a371f7;">
             <small>Replied</small>
-            <h3 class="text-warning">{{ stats.replied }}</h3>
+            <h3 style="color:#a371f7;">{{ stats.replied }}</h3>
         </div>
     </div>
 </div>
 
+<!-- Detail Stats -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="stat-card">
@@ -37,14 +57,18 @@
             <h3>{{ stats.today_sent }}</h3>
         </div>
     </div>
-    {% for step, count in stats.by_step.items() %}
     <div class="col-md-3">
         <div class="stat-card">
-            <small>{{ step.replace('_', ' ').title() }}</small>
-            <h3>{{ count }}</h3>
+            <small>No Chatbot (easy sell)</small>
+            <h3 class="text-warning">{{ stats.no_chatbot }}</h3>
         </div>
     </div>
-    {% endfor %}
+    <div class="col-md-3">
+        <div class="stat-card">
+            <small>No Website (hot)</small>
+            <h3 style="color:#f85149;">{{ stats.no_website }}</h3>
+        </div>
+    </div>
     {% if stats.contacted > 0 %}
     <div class="col-md-3">
         <div class="stat-card">
@@ -54,6 +78,20 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Source Breakdown -->
+{% if stats.by_source %}
+<div class="row g-3 mb-4">
+    {% for source, count in stats.by_source.items() %}
+    <div class="col-md-2">
+        <div class="stat-card text-center">
+            <small>{{ source }}</small>
+            <h3>{{ count }}</h3>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 <!-- Quick Actions -->
 <div class="row g-3 mb-4">
@@ -77,7 +115,7 @@
     </div>
     <div class="col-md-3">
         <a href="/send" class="btn btn-outline-primary w-100 py-3">
-            <i class="bi bi-send"></i> Send
+            <i class="bi bi-send"></i> Send Sequence
         </a>
     </div>
 </div>
@@ -87,20 +125,38 @@
 <div class="table-responsive">
     <table class="table table-sm">
         <thead>
-            <tr><th>Business</th><th>Email</th><th>Phone</th><th>Source</th><th>Status</th></tr>
+            <tr><th>Business</th><th>Email</th><th>Phone</th><th>Score</th><th>Source</th><th>Status</th></tr>
         </thead>
         <tbody>
         {% for lead in leads %}
             <tr>
-                <td>{{ lead.store_name or lead.domain }}</td>
+                <td>
+                    {{ lead.store_name or lead.domain }}
+                    {% if lead.has_chatbot == 0 and lead.website %}
+                        <span class="badge bg-warning text-dark" style="font-size:.6rem;">NO CHATBOT</span>
+                    {% endif %}
+                </td>
                 <td>{{ lead.email or '<span class="text-muted">none</span>'|safe }}</td>
                 <td>{{ lead.phone or '-' }}</td>
+                <td>
+                    {% if lead.score is not none %}
+                        {% if lead.score < 20 %}
+                            <span class="badge" style="background:#f85149;">HOT</span>
+                        {% elif lead.score < 40 %}
+                            <span class="badge" style="background:#f0883e;">WARM</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ lead.score }}</span>
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td><span class="badge bg-secondary">{{ lead.source or '-' }}</span></td>
                 <td><span class="badge badge-{{ lead.status }}">{{ lead.status }}</span></td>
             </tr>
         {% endfor %}
         {% if not leads %}
-            <tr><td colspan="5" class="text-center text-muted py-4">No leads yet. Start with Google Maps!</td></tr>
+            <tr><td colspan="6" class="text-center text-muted py-4">No leads yet. Start with Google Maps!</td></tr>
         {% endif %}
         </tbody>
     </table>
